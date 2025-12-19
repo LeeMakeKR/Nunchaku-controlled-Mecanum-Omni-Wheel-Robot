@@ -6,15 +6,18 @@ Wii Nunchaku 컨트롤러를 사용하여 메카넘 휠 및 옴니휠 로봇 베
 
 ## 개요
 
-<img src="pic/20251116_180231_1.jpg" width="500">
+<img src="pic/20251130_003352.jpg" width="500">
 
 
 
 <details>
 <summary>더 많은 이미지 보기</summary>
 
+<img src="pic/20251129_123740.jpg" width="500">
 <img src="pic/20251129_235622.jpg" width="500">
-<img src="pic/20251130_003352.jpg" width="500">
+<img src="pic/20251120_083302.jpg" width="500">
+<img src="pic/20251115_235526.jpg" width="500">
+<img src="pic/20251129_153536.jpg" width="500">
 
 </details>
 
