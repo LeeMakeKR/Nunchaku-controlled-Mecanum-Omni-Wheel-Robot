@@ -24,3 +24,7 @@ OLED 디스플레이는 실시간 상태 정보를 표시합니다.
 <img src="pic/screenshot2025-12-19 100057.png" width="600px">
 
 
+상세 회로와 보드 파일은 아래 링크에서 확인할 수 있습니다:
+https://oshwlab.com/pashiran/mecanum-omni_wheel_platform
+
+
