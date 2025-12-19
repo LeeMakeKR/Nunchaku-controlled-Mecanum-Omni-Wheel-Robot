@@ -1,4 +1,5 @@
 # 3D 하드웨어 및 제작, 조립
+<br>
 
 ## 개요
 
@@ -16,18 +17,21 @@ NEMA17모터의 기본 크기 때문에 맞는 바퀴를 찾기 어려워, 직�
 
 <img src="pic/screenshot_2025-12-19 102225.png" width="500px">
 
+<br>
 이 프로젝트는 OnShape로 설계되었으며, 공개 링크는 다음과 같습니다:
-
-
 
 https://cad.onshape.com/documents/ff57bdec1c6d6779bf98a37f/w/822729bdbaf3735bbfd197a1/e/99650087abd6c72c45d13ea9
 
 
-<br><br>
+<br>
 
-메카넘 휠과 옴니휠 링크는 다음과 같습니다:
+메카넘 휠과 옴니휠 링크는 다음과 같습니다
 
 https://cad.onshape.com/documents/c310c3effb38c7f3acc79f58/w/c07cc897fb06c8a4155324c2/e/7e88b5236d8c2297355b210d
+
+<br><br><br><br><br><br>
+
+
 
 <img src="pic/screenshot_2025-12-19 102320.png" width="500px">
 
@@ -38,9 +42,10 @@ https://cad.onshape.com/documents/c310c3effb38c7f3acc79f58/w/c07cc897fb06c8a4155
 
 
 TPU 인쇄의 편리성을 위해 작은 바퀴의 바깥 부분은 분리되어 있습니다. 
+
 TPU를 사용하지 않을 경우 그냥 붙여서 인쇄하면 한 덩어리로 인쇄됩니다. 
-
-
+<br><br>
+<br><br><br><br>
 
 
 ## 추가 부품
