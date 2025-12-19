@@ -7,6 +7,9 @@ Wii Nunchaku 컨트롤러는 I2C 통신으로 연결되며
 OLED 디스플레이는 실시간 상태 정보를 표시합니다.
 배터리 전압 모니터링과 WS2812 LED를 통한 시각적 피드백 기능도 포함되어 있습니다.
 
+<br>
+<br>
+
 ## 회로 구성 요소
 
 - **ESP32 DevKit**: 메인 컨트롤러로, Wi-Fi 및 Bluetooth 기능을 제공합니다.
@@ -16,15 +19,53 @@ OLED 디스플레이는 실시간 상태 정보를 표시합니다.
 - **WS2812 LED**: 시각적 피드백을 제공하여 로봇의 상태를 쉽게 파악할 수 있습니다.
 
 
-
-
+<br>
+<br>
+<br>
 
 <img src="pic/SCH_Schematic1_1-P1_2025-12-19.png" width="600px">
+
+<br>
 
 <img src="pic/screenshot2025-12-19 100057.png" width="600px">
 
 
+<br>
+<br>
+<br>
+
 상세 회로와 보드 파일은 아래 링크에서 확인할 수 있습니다:
+
 https://oshwlab.com/pashiran/mecanum-omni_wheel_platform
+
+
+<br>
+<br>
+
+
+## 참조
+12-to-5V DC-DC 컨버터 모듈은 아래의 제품을 사용했습니다. 
+전압 설정 부분은 상품의 상세 설명에 나와 있습니다.
+하단의 adj 패턴을 잘라내고 5V 점퍼 패턴을 납땜하면 됩니다. 
+
+<br>
+
+<img src="pic/screenshot 2025-12-19 115803.png" width="600px">
+
+
+https://ko.aliexpress.com/item/1005007369519036.html
+
+
+<br>
+<br>
+<br>
+
+
+DC-DC 는 아래의 위치에 사용됩니다.
+꼭 같은 제품을 사용할 필요 없이 적당한 모듈이나 레귤레이터를 사용해도 됩니다. 
+
+<img src="pic/screenshot2025-12-19 100057_2.png" width="600px">
+
+
 
 
