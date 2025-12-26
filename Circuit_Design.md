@@ -21,7 +21,7 @@ OLED 디스플레이는 실시간 상태 정보를 표시합니다.
 
 <br>
 <br>
-<br>
+
 
 <img src="pic/SCH_Schematic1_1-P1_2025-12-19.png" width="600px">
 
@@ -32,7 +32,7 @@ OLED 디스플레이는 실시간 상태 정보를 표시합니다.
 
 <br>
 <br>
-<br>
+
 
 상세 회로와 보드 파일은 아래 링크에서 확인할 수 있습니다:
 
@@ -58,13 +58,15 @@ https://ko.aliexpress.com/item/1005007369519036.html
 
 <br>
 <br>
-<br>
+
 
 
 DC-DC 는 아래의 위치에 사용됩니다.
 꼭 같은 제품을 사용할 필요 없이 적당한 모듈이나 레귤레이터를 사용해도 됩니다. 
 
 <img src="pic/screenshot2025-12-19 100057_2.png" width="600px">
+
+<br><br>
 
 
 
