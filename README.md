@@ -82,6 +82,14 @@ I2C 방식으로 신호를 주고받으며 아두이노 라이브러리를 통�
 <img src="pic/screenshot_114636.png" width="500">
 
 
+<br><br>
+
+
+# 제작과 조립
+
+## 컨트롤러 및 회로
+
+회로와 회로 제작에 대한 설명은 [Circuit_Design.md](Circuit_Design.md)를 참조하세요.
 <br>
 
 
@@ -91,10 +99,6 @@ I2C 방식으로 신호를 주고받으며 아두이노 라이브러리를 통�
 <br>
 
 
-### 컨트롤러 및 회로
-
-자세한 회로 설계는 [Circuit_Design.md](Circuit_Design.md)를 참조하세요.
-<br>
 
 
 
