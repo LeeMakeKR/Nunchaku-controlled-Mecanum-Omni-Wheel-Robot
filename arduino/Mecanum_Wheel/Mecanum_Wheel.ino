@@ -79,20 +79,20 @@ void loop() {
   digitalWrite(MOTOR4_DIR, HIGH);
   
   // 200스텝 회전
-  for(int i = 0; i < 200; i++) {
+  for(int i = 0; i < 1600; i++) {
     digitalWrite(MOTOR1_STEP, HIGH);
     digitalWrite(MOTOR2_STEP, HIGH);
     digitalWrite(MOTOR3_STEP, HIGH);
     digitalWrite(MOTOR4_STEP, HIGH);
-    delayMicroseconds(1000);
+    delayMicroseconds(200);
     
     digitalWrite(MOTOR1_STEP, LOW);
     digitalWrite(MOTOR2_STEP, LOW);
     digitalWrite(MOTOR3_STEP, LOW);
     digitalWrite(MOTOR4_STEP, LOW);
-    delayMicroseconds(1000);
+    delayMicroseconds(200);
   }
-  
+  /*
   // 방향 설정: 후진
   digitalWrite(MOTOR1_DIR, LOW);
   digitalWrite(MOTOR2_DIR, LOW);
@@ -100,17 +100,18 @@ void loop() {
   digitalWrite(MOTOR4_DIR, LOW);
   
   // 200스텝 회전
-  for(int i = 0; i < 200; i++) {
+  for(int i = 0; i < 1600; i++) {
     digitalWrite(MOTOR1_STEP, HIGH);
     digitalWrite(MOTOR2_STEP, HIGH);
     digitalWrite(MOTOR3_STEP, HIGH);
     digitalWrite(MOTOR4_STEP, HIGH);
-    delayMicroseconds(1000);
+    delayMicroseconds(100);
     
     digitalWrite(MOTOR1_STEP, LOW);
     digitalWrite(MOTOR2_STEP, LOW);
     digitalWrite(MOTOR3_STEP, LOW);
     digitalWrite(MOTOR4_STEP, LOW);
-    delayMicroseconds(1000);
+    delayMicroseconds(100);
   }
+  */
 }
