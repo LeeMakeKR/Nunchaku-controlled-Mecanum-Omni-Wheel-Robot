@@ -29,7 +29,16 @@ https://cad.onshape.com/documents/ff57bdec1c6d6779bf98a37f/w/822729bdbaf3735bbfd
 
 https://cad.onshape.com/documents/c310c3effb38c7f3acc79f58/w/c07cc897fb06c8a4155324c2/e/7e88b5236d8c2297355b210d
 
-<br><br><br><br><br><br>
+<br>
+
+
+#### 출력용 파일 다운로드
+
+<img src="pic/K-20251228-204711554.jpg" width="500px">
+
+출력을 원하는 어셈블리/파트에 오른쪽 마우스 클릭 후 export 를 선택하면 step, stl 등 여러 포맷으로 다운로드 가능합니다. 
+
+<br><br><br><br><br>
 
 
 
@@ -48,11 +57,26 @@ TPU를 사용하지 않을 경우 그냥 붙여서 인쇄하면 한 덩어리로
 <br><br><br><br>
 
 
-## 추가 부품
-휠 조립을 위해 다음의 추가부품이 필요합니다. 
+### 추가 부품
+조립을 위해 다음의 추가부품이 필요합니다. 
+
+#### 인서트 너트
 
 
-### 셀프 테핑 볼트
+
+https://ko.aliexpress.com/item/1005003582355741.html
+
+M3
+
+
+
+#### PCB 스페이서 
+
+https://ko.aliexpress.com/item/1005008237420603.html
+
+M3 10mm
+
+#### 셀프 테핑 볼트
 
 <img src="pic/스크린샷 2025-12-19 122057.png" width="300px">
 
@@ -63,7 +87,7 @@ M2x5 / M3x14
 <br><br>
 
 
-### 황동선
+#### 황동선
 
 <img src="pic/screenshot 2025-12-19 122040.png" width="300px">
 
@@ -76,7 +100,7 @@ https://ko.aliexpress.com/item/1005006242551699.html
 <br><br>
 
 
-### 플렌지 커플러
+#### 플렌지 커플러
 
 모터와 바퀴의 연결을 위해 플렌지 커플러가 필요합니다.
 
@@ -87,7 +111,7 @@ https://ko.aliexpress.com/item/4000221287535.html
 
 <br><br>
 
-### NEMA17 스텝모터
+#### NEMA17 스텝모터
 
 
 <img src="pic/screenshot 2025-12-26 113451.png" width="300px">
