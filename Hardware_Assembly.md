@@ -51,6 +51,9 @@ TPU를 사용하지 않을 경우 그냥 붙여서 인쇄하면 한 덩어리로
 ## 추가 부품
 휠 조립을 위해 다음의 추가부품이 필요합니다. 
 
+
+### 셀프 테핑 볼트
+
 <img src="pic/스크린샷 2025-12-19 122057.png" width="300px">
 
 https://ko.aliexpress.com/item/1005006212097286.html
@@ -60,7 +63,9 @@ M2x5 / M3x14
 <br><br>
 
 
-<img src="pic/스크린샷 2025-12-19 122040.png" width="300px">
+### 황동선
+
+<img src="pic/screenshot 2025-12-19 122040.png" width="300px">
 
 https://ko.aliexpress.com/item/1005006242551699.html
 
@@ -71,8 +76,26 @@ https://ko.aliexpress.com/item/1005006242551699.html
 <br><br>
 
 
+### 플렌지 커플러
+
+모터와 바퀴의 연결을 위해 플렌지 커플러가 필요합니다.
+
 https://ko.aliexpress.com/item/4000221287535.html
 
 갖고 있는 스텝모터의 축 지름에 맞춰 구입합니다. 
-보통은 6mm 입니다. 
+보통은 6mm 이나 특정 모델은 6.35, 혹은 5mm 일 수 있으니 확인 후 구입 바랍니다. 
+
+<br><br>
+
+### NEMA17 스텝모터
+
+
+<img src="pic/screenshot 2025-12-26 113451.png" width="300px">
+
+알리에서 NEMA17 스텝모터로 검색하면 다양한 제품이 나옵니다. 
+
+케이블이 포함된 제품을 구입하는 것이 편리합니다. 
+
+
+
 
