@@ -100,9 +100,9 @@ $$
 \frac{1}{r}
 \begin{bmatrix}
 1 & -1 & -(L_x+L_y)\\
-1 & \ \ 1 & \ \ (L_x+L_y)\\
-1 & \ \ 1 & -(L_x+L_y)\\
-1 & -1 & \ \ (L_x+L_y)
+1 & +1 & +(L_x+L_y)\\
+1 & +1 & -(L_x+L_y)\\
+1 & -1 & +(L_x+L_y)
 \end{bmatrix}
 \begin{bmatrix}
 v_x\\

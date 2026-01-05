@@ -1,44 +1,40 @@
-// TMC2209 스텝모터 4개 제어 코드
+// TMC2209 메카넘 휠 제어 코드
 // ESP32 DEVKIT 사용
-// 참고: D21=SDA, D22=SCL (I2C 핀)
+// Wii Nunchaku로 제어
 
-#include <U8g2lib.h>
+//#include <U8g2lib.h>
 #include <Wire.h>
 #include <FastLED.h>
 
 // U8G2 OLED 디스플레이 설정
-U8G2_SSD1306_128X64_NONAME_F_HW_I2C u8g2(U8G2_R0, /* reset=*/ U8X8_PIN_NONE);
+//U8G2_SSD1306_128X64_NONAME_F_HW_I2C u8g2(U8G2_R0, /* reset=*/ U8X8_PIN_NONE);
 
 // 핀 정의
-// 모터 1
-#define MOTOR1_DIR    16  // RX2
-#define MOTOR1_STEP   17  // TX2
+// Rear Right Motor
+#define MOTOR_RR_DIR    16  // RX2
+#define MOTOR_RR_STEP   17  // TX2
 
-// 모터 2
-#define MOTOR2_DIR    18  // D18
-#define MOTOR2_STEP   19  // D19
+// Right Front Motor
+#define MOTOR_RF_DIR    18  // D18
+#define MOTOR_RF_STEP   19  // D19
 
-// 모터 3
-#define MOTOR3_DIR    13  // D13
-#define MOTOR3_STEP   14  // D14
+// Left Rear Motor
+#define MOTOR_LR_DIR    13  // D13
+#define MOTOR_LR_STEP   14  // D14
 
-// 모터 4
-#define MOTOR4_DIR    25  // D25
-#define MOTOR4_STEP   26  // D26
+// Left Front Motor
+#define MOTOR_LF_DIR    25  // D25
+#define MOTOR_LF_STEP   26  // D26
 
 // 공통 ENABLE 핀
 #define ENABLE_PIN    27  // D27
 
-// 배터리 전압 측정 (VBAT)
-#define BATTERY_PIN   34  // D34 (아날로그 입력)
-
 // WS2812 LED 설정
 #define LED_PIN       23  // D23 (WS2812 출력)
-#define NUM_LEDS      1   // LED 개수
-#define LED_BRIGHTNESS 50 // 밝기 (0-255)
+#define NUM_LEDS      1
+#define LED_BRIGHTNESS 50
 
 CRGB leds[NUM_LEDS];
-uint8_t gHue = 0;  // 레인보우 효과용 색상 변수
 
 // Wii Nunchaku I2C 주소
 #define NUNCHAKU_ADDRESS 0x52
@@ -56,53 +52,44 @@ struct NunchakuData {
 
 NunchakuData nunchaku;
 
-// 스텝 모터 파라미터
-const int stepsPerRevolution = 200;  // 모터 1회전당 스텝 수 (1.8도 스텝 각도)
-const int stepDelay = 1000;          // 스텝 간 딜레이 (마이크로초)
+// 메카넘 휠 파라미터 (mm)
+const float WHEEL_DIAMETER = 65.0;      // 바퀴 지름
+const float WHEEL_RADIUS = WHEEL_DIAMETER / 2.0;
+const float WHEELBASE_X = 138.0;        // 전후 바퀴 축간 거리
+const float WHEELBASE_Y = 168.0;        // 좌우 바퀴 중심 거리
+const float L_X = WHEELBASE_X / 2.0;    // 69mm
+const float L_Y = WHEELBASE_Y / 2.0;    // 84mm
+const float L_SUM = L_X + L_Y;          // 153mm
 
-// 모터 상태 변수
-int currentSteps = 0;
-String motorDirection = "STOP";
-int motorSpeed = 0;
+// 모터 파라미터
+const int STEPS_PER_REV = 200;          // 1회전당 스텝 (1.8도)
+const int MICROSTEPS = 32;              // 마이크로스텝 설정 (TMC2209)
+const int TOTAL_STEPS_PER_REV = STEPS_PER_REV * MICROSTEPS;  // 6400
+const float MIN_STEP_DELAY_US = 200;    // 최소 스텝 딜레이 (마이크로초)
+const float MAX_STEP_DELAY_US = 1000;   // 최대 스텝 딜레이 (마이크로초)
+
+// 조이스틱 데드존 및 스케일
+const int JOY_CENTER = 128;
+const int JOY_DEADZONE = 20;
+const float MAX_VELOCITY = 100.0;       // mm/s
+
+// 모터 속도 (rad/s)
+float omega_LF = 0, omega_RF = 0, omega_LR = 0, omega_RR = 0;
 
 void setup() {
-  // 시리얼 통신 초기화
-  Serial.begin(115200);
-  Serial.println("Mecanum Motor Control with Nunchaku");
-  
-  // I2C 초기화 (OLED 디스플레이 및 Nunchaku용)
+  // I2C 초기화
   Wire.begin();
   
-  // OLED 디스플레이 초기화
-  u8g2.begin();
-  u8g2.clearBuffer();
-  u8g2.setFont(u8g2_font_ncenB08_tr);
-  u8g2.drawStr(0, 15, "Motor Control");
-  u8g2.drawStr(0, 30, "Initializing...");
-  u8g2.sendBuffer();
-  
   // 핀 모드 설정
-  // 모터 1
-  pinMode(MOTOR1_DIR, OUTPUT);
-  pinMode(MOTOR1_STEP, OUTPUT);
-  
-  // 모터 2
-  pinMode(MOTOR2_DIR, OUTPUT);
-  pinMode(MOTOR2_STEP, OUTPUT);
-  
-  // 모터 3
-  pinMode(MOTOR3_DIR, OUTPUT);
-  pinMode(MOTOR3_STEP, OUTPUT);
-  
-  // 모터 4
-  pinMode(MOTOR4_DIR, OUTPUT);
-  pinMode(MOTOR4_STEP, OUTPUT);
-  
-  // Enable 핀 (LOW = 활성화, HIGH = 비활성화)
+  pinMode(MOTOR_RR_DIR, OUTPUT);
+  pinMode(MOTOR_RR_STEP, OUTPUT);
+  pinMode(MOTOR_RF_DIR, OUTPUT);
+  pinMode(MOTOR_RF_STEP, OUTPUT);
+  pinMode(MOTOR_LR_DIR, OUTPUT);
+  pinMode(MOTOR_LR_STEP, OUTPUT);
+  pinMode(MOTOR_LF_DIR, OUTPUT);
+  pinMode(MOTOR_LF_STEP, OUTPUT);
   pinMode(ENABLE_PIN, OUTPUT);
-  
-  // 배터리 전압 측정 핀 (VBAT)
-  pinMode(BATTERY_PIN, INPUT);
   
   // WS2812 LED 초기화
   FastLED.addLeds<WS2812, LED_PIN, GRB>(leds, NUM_LEDS);
@@ -110,134 +97,11 @@ void setup() {
   
   // Nunchaku 초기화
   nunchakuInit();
-  Serial.println("Nunchaku initialized");
   
   // 모터 활성화
   digitalWrite(ENABLE_PIN, LOW);
   
-  // 초기 방향 설정 (HIGH = 시계방향, LOW = 반시계방향)
-  digitalWrite(MOTOR1_DIR, HIGH);
-  digitalWrite(MOTOR2_DIR, HIGH);
-  digitalWrite(MOTOR3_DIR, HIGH);
-  digitalWrite(MOTOR4_DIR, HIGH);
-  
   delay(100);
-  
-  // 디스플레이 준비 완료 메시지
-  u8g2.clearBuffer();
-  u8g2.setFont(u8g2_font_ncenB08_tr);
-  u8g2.drawStr(0, 15, "Ready!");
-  u8g2.sendBuffer();
-  delay(1000);
-}
-
-// OLED에 가속도 그래프 표시
-void displayAccelGraph() {
-  u8g2.clearBuffer();
-  u8g2.setFont(u8g2_font_5x7_tr);
-  
-  // 제목
-  u8g2.drawStr(0, 7, "Accel Graph");
-  
-  // 가속도 범위: 약 200~800 (중심 500)
-  // OLED 그래프 범위: 0~60 픽셀
-  int baseY = 63;  // 그래프 바닥
-  int graphHeight = 50;  // 그래프 높이
-  
-  // X축 기준선
-  int refLine = baseY - 25;
-  u8g2.drawLine(20, refLine, 127, refLine);
-  
-  // X 가속도 (빨간색 - 왼쪽)
-  int xBar = map(nunchaku.accelX, 200, 800, 0, graphHeight);
-  xBar = constrain(xBar, 0, graphHeight);
-  u8g2.drawBox(25, baseY - xBar, 8, xBar);
-  u8g2.drawStr(25, 63, "X");
-  
-  // Y 가속도 (중간)
-  int yBar = map(nunchaku.accelY, 200, 800, 0, graphHeight);
-  yBar = constrain(yBar, 0, graphHeight);
-  u8g2.drawBox(55, baseY - yBar, 8, yBar);
-  u8g2.drawStr(55, 63, "Y");
-  
-  // Z 가속도 (오른쪽)
-  int zBar = map(nunchaku.accelZ, 200, 800, 0, graphHeight);
-  zBar = constrain(zBar, 0, graphHeight);
-  u8g2.drawBox(85, baseY - zBar, 8, zBar);
-  u8g2.drawStr(85, 63, "Z");
-  
-  // 수치 표시
-  u8g2.setFont(u8g2_font_4x6_tr);
-  u8g2.setCursor(95, 20);
-  u8g2.print("X:");
-  u8g2.print(nunchaku.accelX);
-  u8g2.setCursor(95, 30);
-  u8g2.print("Y:");
-  u8g2.print(nunchaku.accelY);
-  u8g2.setCursor(95, 40);
-  u8g2.print("Z:");
-  u8g2.print(nunchaku.accelZ);
-  
-  // 버튼 상태
-  u8g2.setCursor(95, 55);
-  if(nunchaku.buttonC) u8g2.print("C");
-  if(nunchaku.buttonZ) u8g2.print("Z");
-  
-  u8g2.sendBuffer();
-}
-
-void updateDisplay() {
-  u8g2.clearBuffer();
-  u8g2.setFont(u8g2_font_ncenB08_tr);
-  
-  // 제목
-  u8g2.drawStr(0, 10, "Mecanum Motor");
-  
-  // 방향 표시
-  u8g2.drawStr(0, 25, "Dir:");
-  u8g2.setCursor(35, 25);
-  u8g2.print(motorDirection);
-  
-  // 스텝 수 표시
-  u8g2.drawStr(0, 40, "Steps:");
-  u8g2.setCursor(45, 40);
-  u8g2.print(currentSteps);
-  
-  // 속도 표시
-  u8g2.drawStr(0, 55, "Speed:");
-  u8g2.setCursor(45, 55);
-  u8g2.print(motorSpeed);
-  u8g2.drawStr(80, 55, "us");
-  
-  u8g2.sendBuffer();
-}
-
-void updateRainbow() {
-  // 레인보우 효과
-  fill_rainbow(leds, NUM_LEDS, gHue, 14);
-  FastLED.show();
-  gHue++;
-}
-
-// 버튼 상태에 따른 LED 색상 출력
-void updateButtonLED() {
-  if(nunchaku.buttonC && nunchaku.buttonZ) {
-    // 둘 다 누르면: 빨간색 + 파란색 = 마젤타 (R+B)
-    leds[0] = CRGB(255, 0, 255);  // 마젠타
-  }
-  else if(nunchaku.buttonC) {
-    // C 버튼만 누르면: 빨간색
-    leds[0] = CRGB(255, 0, 0);  // Red
-  }
-  else if(nunchaku.buttonZ) {
-    // Z 버튼만 누르면: 파란색
-    leds[0] = CRGB(0, 0, 255);  // Blue
-  }
-  else {
-    // 아무것도 안 누르면: 꺼짐
-    leds[0] = CRGB(0, 0, 0);  // OFF
-  }
-  FastLED.show();
 }
 
 // Nunchaku 초기화
@@ -289,88 +153,145 @@ bool nunchakuRead() {
   return false;
 }
 
-// Nunchaku 데이터 시리얼 출력 (시리얼 플로터용)
-void printNunchakuData() {
-  // 시리얼 플로터 형식: Label:value 형식으로 공백 구분
-  Serial.print("JoyX:");
-  Serial.print(nunchaku.joyX);
-  Serial.print(" JoyY:");
-  Serial.print(nunchaku.joyY);
-  Serial.print(" AccelX:");
-  Serial.print(nunchaku.accelX);
-  Serial.print(" AccelY:");
-  Serial.print(nunchaku.accelY);
-  Serial.print(" AccelZ:");
-  Serial.print(nunchaku.accelZ);
-  Serial.print(" ButtonC:");
-  Serial.print(nunchaku.buttonC ? 1 : 0);
-  Serial.print(" ButtonZ:");
-  Serial.println(nunchaku.buttonZ ? 1 : 0);
+// 조이스틱 입력을 차체 속도로 변환 (벡터 기반)
+void joystickToVelocity(int joyX, int joyY, float &v_x, float &v_y, float &omega) {
+  // 중심 기준으로 변환
+  int dx = joyX - JOY_CENTER;  // 양수=오른쪽, 음수=왼쪽
+  int dy = joyY - JOY_CENTER;  // 양수=앞, 음수=뒤
+  
+  // 데드존 적용
+  if(abs(dx) < JOY_DEADZONE) dx = 0;
+  if(abs(dy) < JOY_DEADZONE) dy = 0;
+  
+  // 벡터 크기(기울기) 계산
+  float magnitude = sqrt(dx * dx + dy * dy);
+  
+  if(magnitude > 0) {
+    // 최대 크기로 정규화
+    float maxMagnitude = sqrt(JOY_CENTER * JOY_CENTER * 2);
+    float normalizedMag = magnitude / maxMagnitude;
+    normalizedMag = constrain(normalizedMag, 0.0, 1.0);
+    
+    // 속도 크기 계산
+    float velocity = normalizedMag * MAX_VELOCITY;
+    
+    // 정규화된 방향 벡터
+    float dir_x = dx / magnitude;
+    float dir_y = dy / magnitude;
+    
+    // 조이스틱 방향을 차체 좌표로 매핑
+    // dy(전후) → v_x(전후), -dx(좌우) → v_y(좌우, 오른쪽을 음수로)
+    v_x = velocity * dir_y;   // 앞으로 기울이면 전진(양수)
+    v_y = velocity * (-dir_x); // 오른쪽으로 기울이면 우측(음수)
+  } else {
+    v_x = 0;
+    v_y = 0;
+  }
+  
+  omega = 0;  // 회전은 나중에 추가 (버튼으로 제어 가능)
+}
+
+// 메카넘 역기구학: 차체 속도 -> 바퀴 각속도 (rad/s)
+void inverseKinematics(float v_x, float v_y, float omega, 
+                       float &w_LF, float &w_RF, float &w_LR, float &w_RR) {
+  // Mecanum_calc.md의 공식 사용
+  w_LF = (v_x - v_y - L_SUM * omega) / WHEEL_RADIUS;
+  w_RF = (v_x + v_y + L_SUM * omega) / WHEEL_RADIUS;
+  w_LR = (v_x + v_y - L_SUM * omega) / WHEEL_RADIUS;
+  w_RR = (v_x - v_y + L_SUM * omega) / WHEEL_RADIUS;
+}
+
+// 각속도를 스텝 수와 방향으로 변환
+void angularVelocityToSteps(float omega, int &steps, bool &dir, float dt) {
+  // dt 시간 동안 회전할 각도 (라디안)
+  float theta = omega * dt;
+  
+  // 스텝 수 계산
+  float revolutions = theta / (2.0 * PI);
+  steps = abs(revolutions * TOTAL_STEPS_PER_REV);
+  
+  // 방향 결정
+  dir = (omega >= 0);
+}
+
+// 4개 모터 동시 제어 (최대 스텝 수 기준, 가변 속도)
+void moveRobot(float w_LF, float w_RF, float w_LR, float w_RR, float dt) {
+  int steps_LF, steps_RF, steps_LR, steps_RR;
+  bool dir_LF, dir_RF, dir_LR, dir_RR;
+  
+  // 각 바퀴의 스텝 수와 방향 계산
+  angularVelocityToSteps(w_LF, steps_LF, dir_LF, dt);
+  angularVelocityToSteps(w_RF, steps_RF, dir_RF, dt);
+  angularVelocityToSteps(w_LR, steps_LR, dir_LR, dt);
+  angularVelocityToSteps(w_RR, steps_RR, dir_RR, dt);
+  
+  // 방향 설정 (L모터: HIGH=정회전, R모터: LOW=정회전)
+  digitalWrite(MOTOR_LF_DIR, dir_LF ? HIGH : LOW);
+  digitalWrite(MOTOR_RF_DIR, dir_RF ? LOW : HIGH);
+  digitalWrite(MOTOR_LR_DIR, dir_LR ? HIGH : LOW);
+  digitalWrite(MOTOR_RR_DIR, dir_RR ? LOW : HIGH);
+  
+  // 최대 스텝 수 계산
+  int maxSteps = max(max(steps_LF, steps_RF), max(steps_LR, steps_RR));
+  
+  // 최대 각속도로 스텝 딜레이 계산 (각속도가 클수록 딜레이 작음)
+  float maxOmega = max(max(abs(w_LF), abs(w_RF)), max(abs(w_LR), abs(w_RR)));
+  float stepDelay = MAX_STEP_DELAY_US;
+  if(maxOmega > 0.1) {  // 최소 각속도 임계값
+    // 각속도에 반비례하는 딜레이 (각속도 클수록 딜레이 짧음)
+    stepDelay = map(maxOmega * 100, 0, MAX_VELOCITY / WHEEL_RADIUS * 100, MAX_STEP_DELAY_US, MIN_STEP_DELAY_US);
+    stepDelay = constrain(stepDelay, MIN_STEP_DELAY_US, MAX_STEP_DELAY_US);
+  }
+  
+  // 동시 스텝 실행
+  for(int i = 0; i < maxSteps; i++) {
+    if(i < steps_LF) digitalWrite(MOTOR_LF_STEP, HIGH);
+    if(i < steps_RF) digitalWrite(MOTOR_RF_STEP, HIGH);
+    if(i < steps_LR) digitalWrite(MOTOR_LR_STEP, HIGH);
+    if(i < steps_RR) digitalWrite(MOTOR_RR_STEP, HIGH);
+    delayMicroseconds(stepDelay);
+    
+    digitalWrite(MOTOR_LF_STEP, LOW);
+    digitalWrite(MOTOR_RF_STEP, LOW);
+    digitalWrite(MOTOR_LR_STEP, LOW);
+    digitalWrite(MOTOR_RR_STEP, LOW);
+    delayMicroseconds(stepDelay);
+  }
+}
+
+// 버튼 상태에 따른 LED 색상
+void updateButtonLED() {
+  if(nunchaku.buttonC && nunchaku.buttonZ) {
+    leds[0] = CRGB(255, 0, 255);  // 마젠타
+  }
+  else if(nunchaku.buttonC) {
+    leds[0] = CRGB(255, 0, 0);  // 빨강
+  }
+  else if(nunchaku.buttonZ) {
+    leds[0] = CRGB(0, 0, 255);  // 파랑
+  }
+  else {
+    leds[0] = CRGB(0, 255, 0);  // 초록 (정상 작동)
+  }
+  FastLED.show();
 }
 
 void loop() {
-  // Nunchaku 데이터 읽기 및 OLED 그래프 표시
+  // Nunchaku 데이터 읽기
   if(nunchakuRead()) {
-    displayAccelGraph();
-    // 버튼 상태에 따른 LED 업데이트
+    // 조이스틱 -> 차체 속도
+    float v_x, v_y, omega;
+    joystickToVelocity(nunchaku.joyX, nunchaku.joyY, v_x, v_y, omega);
+    
+    // 차체 속도 -> 바퀴 각속도
+    inverseKinematics(v_x, v_y, omega, omega_LF, omega_RF, omega_LR, omega_RR);
+    
+    // 로봇 이동 (dt = 0.05초)
+    moveRobot(omega_LF, omega_RF, omega_LR, omega_RR, 0.05);
+    
+    // LED 업데이트
     updateButtonLED();
   }
   
-  delay(50);  // 50ms 대기
-  
-  /*
-  // 방향 설정: 전진
-  motorDirection = "FORWARD";
-  motorSpeed = 200;
-  currentSteps = 0;
-  updateDisplay();
-  
-  digitalWrite(MOTOR1_DIR, HIGH);B
-  digitalWrite(MOTOR2_DIR, HIGH);
-  digitalWrite(MOTOR3_DIR, HIGH);
-  digitalWrite(MOTOR4_DIR, HIGH);
-  
-  // 200스텝 회전
-  for(int i = 0; i < 1600; i++) {
-    digitalWrite(MOTOR1_STEP, HIGH);
-    digitalWrite(MOTOR2_STEP, HIGH);
-    digitalWrite(MOTOR3_STEP, HIGH);
-    digitalWrite(MOTOR4_STEP, HIGH);
-    delayMicroseconds(100);
-    
-    digitalWrite(MOTOR1_STEP, LOW);
-    digitalWrite(MOTOR2_STEP, LOW);
-    digitalWrite(MOTOR3_STEP, LOW);
-    digitalWrite(MOTOR4_STEP, LOW);
-    delayMicroseconds(100);
-    
-
-  }
-  
-  // 완료 후 잠시 대기
-  motorDirection = "STOP";
-  updateDisplay();
-  delay(2000);
- 
-  // 방향 설정: 후진
-  digitalWrite(MOTOR1_DIR, LOW);
-  digitalWrite(MOTOR2_DIR, LOW);
-  digitalWrite(MOTOR3_DIR, LOW);
-  digitalWrite(MOTOR4_DIR, LOW);
-  
-  // 200스텝 회전
-  for(int i = 0; i < 1600; i++) {
-    digitalWrite(MOTOR1_STEP, HIGH);
-    digitalWrite(MOTOR2_STEP, HIGH);
-    digitalWrite(MOTOR3_STEP, HIGH);
-    digitalWrite(MOTOR4_STEP, HIGH);
-    delayMicroseconds(100);
-    
-    digitalWrite(MOTOR1_STEP, LOW);
-    digitalWrite(MOTOR2_STEP, LOW);
-    digitalWrite(MOTOR3_STEP, LOW);
-    digitalWrite(MOTOR4_STEP, LOW);
-    delayMicroseconds(100);
-  }
-  */
+ //  delay(50);  // 50ms = 20Hz 제어 주기
 }
