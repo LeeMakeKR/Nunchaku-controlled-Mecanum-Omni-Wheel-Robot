@@ -35,6 +35,10 @@ https://cad.onshape.com/documents/ff57bdec1c6d6779bf98a37f/w/822729bdbaf3735bbfd
 전체 제작 난이도가 매우 상승하는 관계로 구매를 추천합니다.
 
 https://ko.aliexpress.com/item/1005007408718710.html
+https://ko.aliexpress.com/item/1005008999375110.html
+
+보유하고 있는 스텝모터 축 지름에 맞는 제품을 구입해야 합니다. 
+보통 5mm, 6mm 이지만 가끔 6.35mm (1/4 inch) 도 있으니 확인하여 구매 바랍니다.
 
 <br>
 
