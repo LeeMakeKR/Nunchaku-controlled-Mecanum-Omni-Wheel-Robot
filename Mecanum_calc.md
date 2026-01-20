@@ -130,9 +130,9 @@ $$
 바퀴 순서를 다음으로 둔다.
 
 1) `FL` = Front-Left  
-2) `FR` = Front-Right  
-3) `RL` = Rear-Left  
-4) `RR` = Rear-Right
+2) `RL` = Rear-Left  
+3) `RR` = Rear-Right  
+4) `FR` = Front-Right
 
 **2절에서 변환된** 차체 좌표계 속도 \([v_x, v_y, \omega]^T\) 가 주어졌을 때,
 각 바퀴의 회전 각속도(rad/s)는 다음이다.
@@ -141,17 +141,17 @@ $$
 $$
 \begin{bmatrix}
 \omega_{FL}\\
-\omega_{FR}\\
 \omega_{RL}\\
-\omega_{RR}
+\omega_{RR}\\
+\omega_{FR}
 \end{bmatrix}
 =
 \frac{1}{r}
 \begin{bmatrix}
 1 & -1 & -(L_x+L_y)\\
-1 & +1 & +(L_x+L_y)\\
 1 & +1 & -(L_x+L_y)\\
-1 & -1 & +(L_x+L_y)
+1 & -1 & +(L_x+L_y)\\
+1 & +1 & +(L_x+L_y)
 \end{bmatrix}
 \begin{bmatrix}
 v_x\\
@@ -165,13 +165,13 @@ $$
 \omega_{FL}=\frac{1}{r}\left(v_x - v_y -(L_x+L_y)\omega\right)
 $$
 $$
-\omega_{FR}=\frac{1}{r}\left(v_x + v_y +(L_x+L_y)\omega\right)
-$$
-$$
 \omega_{RL}=\frac{1}{r}\left(v_x + v_y -(L_x+L_y)\omega\right)
 $$
 $$
 \omega_{RR}=\frac{1}{r}\left(v_x - v_y +(L_x+L_y)\omega\right)
+$$
+$$
+\omega_{FR}=\frac{1}{r}\left(v_x + v_y +(L_x+L_y)\omega\right)
 $$
 
 ---
@@ -198,13 +198,13 @@ $$
 ### 5.2 순수 좌이동
 - 입력: $v_x=0,\ v_y>0,\ \omega=0$
 - 기대:  
-  - $FR, RL$ : 양(+)  
+  - $RL, FR$ : 양(+)  
   - $FL, RR$ : 음(-)
 
 ### 5.3 순수 CCW 회전(차체 중심 기준)
 - 입력: $v_x=0,\ v_y=0,\ \omega>0$
 - 기대:  
-  - $FR, RR$ : 양(+)  
+  - $RR, FR$ : 양(+)  
   - $FL, RL$ : 음(-)
 
 ---
@@ -221,7 +221,7 @@ $$
 - 전역 입력: $V_X = 1.0$ m/s, $V_Y = 0$, $\omega = 0$
 - 차체 각도: $\theta = 90°$
 - 변환: $v_x = 0$, $v_y = -1.0$
-- 결과: 차체가 우측으로 이동 (FL, RR 음(-), FR, RL 양(+))
+- 결과: 차체가 우측으로 이동 (FL, RR 음(-), RL, FR 양(+))
 - **물리적 의미**: 차체는 동쪽을 향하지만, 우측(북쪽)으로 슬라이드하여 전역 북쪽으로 이동
 
 ### 6.3 예시 3: 전역 북쪽으로 이동하면서 회전
@@ -251,7 +251,7 @@ $$
    - $v_y = -V_X \sin\theta + V_Y \cos\theta$
 
 4) **역기구학 적용**:
-   - 3절 식으로 $\omega_{FL,FR,RL,RR}$ 계산 (rad/s)
+   - 3절 식으로 $\omega_{FL,RL,RR,FR}$ 계산 (rad/s)
 
 5) **단위 변환** (필요 시):
    - 4절로 rpm 변환
@@ -280,12 +280,12 @@ v_y = -V_X * sin(theta) + V_Y * cos(theta)
 
 # 역기구학
 omega_FL = (v_x - v_y - S * omega) / r
-omega_FR = (v_x + v_y + S * omega) / r
 omega_RL = (v_x + v_y - S * omega) / r
 omega_RR = (v_x - v_y + S * omega) / r
+omega_FR = (v_x + v_y + S * omega) / r
 
 # 모터 제어
-set_motor_speeds(omega_FL, omega_FR, omega_RL, omega_RR)
+set_motor_speeds(omega_FL, omega_RL, omega_RR, omega_FR)
 ```
 
 ### 7.3 실전 팁

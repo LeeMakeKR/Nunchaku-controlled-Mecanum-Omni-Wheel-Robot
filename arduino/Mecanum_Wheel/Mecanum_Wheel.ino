@@ -10,21 +10,21 @@
 //U8G2_SSD1306_128X64_NONAME_F_HW_I2C u8g2(U8G2_R0, /* reset=*/ U8X8_PIN_NONE);
 
 // 핀 정의
+// Front Left Motor
+#define MOTOR_FL_DIR    21
+#define MOTOR_FL_STEP   22
+
+// Rear Left Motor
+#define MOTOR_RL_DIR    24
+#define MOTOR_RL_STEP   25
+
 // Rear Right Motor
-#define MOTOR_RR_DIR    16  // RX2
-#define MOTOR_RR_STEP   17  // TX2
+#define MOTOR_RR_DIR    13
+#define MOTOR_RR_STEP   14
 
-// Right Front Motor
-#define MOTOR_RF_DIR    18  // D18
-#define MOTOR_RF_STEP   19  // D19
-
-// Left Rear Motor
-#define MOTOR_LR_DIR    13  // D13
-#define MOTOR_LR_STEP   14  // D14
-
-// Left Front Motor
-#define MOTOR_LF_DIR    25  // D25
-#define MOTOR_LF_STEP   26  // D26
+// Front Right Motor
+#define MOTOR_FR_DIR    25
+#define MOTOR_FR_STEP   26
 
 // 공통 ENABLE 핀
 #define ENABLE_PIN    27  // D27
@@ -74,21 +74,21 @@ const int JOY_DEADZONE = 20;
 const float MAX_VELOCITY = 100.0;       // mm/s
 
 // 모터 속도 (rad/s)
-float omega_LF = 0, omega_RF = 0, omega_LR = 0, omega_RR = 0;
+float omega_FL = 0, omega_RL = 0, omega_RR = 0, omega_FR = 0;
 
 void setup() {
   // I2C 초기화
   Wire.begin();
   
   // 핀 모드 설정
+  pinMode(MOTOR_FL_DIR, OUTPUT);
+  pinMode(MOTOR_FL_STEP, OUTPUT);
+  pinMode(MOTOR_RL_DIR, OUTPUT);
+  pinMode(MOTOR_RL_STEP, OUTPUT);
   pinMode(MOTOR_RR_DIR, OUTPUT);
   pinMode(MOTOR_RR_STEP, OUTPUT);
-  pinMode(MOTOR_RF_DIR, OUTPUT);
-  pinMode(MOTOR_RF_STEP, OUTPUT);
-  pinMode(MOTOR_LR_DIR, OUTPUT);
-  pinMode(MOTOR_LR_STEP, OUTPUT);
-  pinMode(MOTOR_LF_DIR, OUTPUT);
-  pinMode(MOTOR_LF_STEP, OUTPUT);
+  pinMode(MOTOR_FR_DIR, OUTPUT);
+  pinMode(MOTOR_FR_STEP, OUTPUT);
   pinMode(ENABLE_PIN, OUTPUT);
   
   // WS2812 LED 초기화
@@ -193,12 +193,12 @@ void joystickToVelocity(int joyX, int joyY, float &v_x, float &v_y, float &omega
 
 // 메카넘 역기구학: 차체 속도 -> 바퀴 각속도 (rad/s)
 void inverseKinematics(float v_x, float v_y, float omega, 
-                       float &w_LF, float &w_RF, float &w_LR, float &w_RR) {
+                       float &w_FL, float &w_RL, float &w_RR, float &w_FR) {
   // Mecanum_calc.md의 공식 사용
-  w_LF = (v_x - v_y - L_SUM * omega) / WHEEL_RADIUS;
-  w_RF = (v_x + v_y + L_SUM * omega) / WHEEL_RADIUS;
-  w_LR = (v_x + v_y - L_SUM * omega) / WHEEL_RADIUS;
+  w_FL = (v_x - v_y - L_SUM * omega) / WHEEL_RADIUS;
+  w_RL = (v_x + v_y - L_SUM * omega) / WHEEL_RADIUS;
   w_RR = (v_x - v_y + L_SUM * omega) / WHEEL_RADIUS;
+  w_FR = (v_x + v_y + L_SUM * omega) / WHEEL_RADIUS;
 }
 
 // 각속도를 스텝 수와 방향으로 변환
@@ -215,27 +215,27 @@ void angularVelocityToSteps(float omega, int &steps, bool &dir, float dt) {
 }
 
 // 4개 모터 동시 제어 (최대 스텝 수 기준, 가변 속도)
-void moveRobot(float w_LF, float w_RF, float w_LR, float w_RR, float dt) {
-  int steps_LF, steps_RF, steps_LR, steps_RR;
-  bool dir_LF, dir_RF, dir_LR, dir_RR;
+void moveRobot(float w_FL, float w_RL, float w_RR, float w_FR, float dt) {
+  int steps_FL, steps_RL, steps_RR, steps_FR;
+  bool dir_FL, dir_RL, dir_RR, dir_FR;
   
   // 각 바퀴의 스텝 수와 방향 계산
-  angularVelocityToSteps(w_LF, steps_LF, dir_LF, dt);
-  angularVelocityToSteps(w_RF, steps_RF, dir_RF, dt);
-  angularVelocityToSteps(w_LR, steps_LR, dir_LR, dt);
+  angularVelocityToSteps(w_FL, steps_FL, dir_FL, dt);
+  angularVelocityToSteps(w_RL, steps_RL, dir_RL, dt);
   angularVelocityToSteps(w_RR, steps_RR, dir_RR, dt);
+  angularVelocityToSteps(w_FR, steps_FR, dir_FR, dt);
   
   // 방향 설정 (L모터: HIGH=정회전, R모터: LOW=정회전)
-  digitalWrite(MOTOR_LF_DIR, dir_LF ? HIGH : LOW);
-  digitalWrite(MOTOR_RF_DIR, dir_RF ? LOW : HIGH);
-  digitalWrite(MOTOR_LR_DIR, dir_LR ? HIGH : LOW);
+  digitalWrite(MOTOR_FL_DIR, dir_FL ? HIGH : LOW);
+  digitalWrite(MOTOR_RL_DIR, dir_RL ? HIGH : LOW);
   digitalWrite(MOTOR_RR_DIR, dir_RR ? LOW : HIGH);
+  digitalWrite(MOTOR_FR_DIR, dir_FR ? LOW : HIGH);
   
   // 최대 스텝 수 계산
-  int maxSteps = max(max(steps_LF, steps_RF), max(steps_LR, steps_RR));
+  int maxSteps = max(max(steps_FL, steps_RL), max(steps_RR, steps_FR));
   
   // 최대 각속도로 스텝 딜레이 계산 (각속도가 클수록 딜레이 작음)
-  float maxOmega = max(max(abs(w_LF), abs(w_RF)), max(abs(w_LR), abs(w_RR)));
+  float maxOmega = max(max(abs(w_FL), abs(w_RL)), max(abs(w_RR), abs(w_FR)));
   float stepDelay = MAX_STEP_DELAY_US;
   if(maxOmega > 0.1) {  // 최소 각속도 임계값
     // 각속도에 반비례하는 딜레이 (각속도 클수록 딜레이 짧음)
@@ -245,16 +245,16 @@ void moveRobot(float w_LF, float w_RF, float w_LR, float w_RR, float dt) {
   
   // 동시 스텝 실행
   for(int i = 0; i < maxSteps; i++) {
-    if(i < steps_LF) digitalWrite(MOTOR_LF_STEP, HIGH);
-    if(i < steps_RF) digitalWrite(MOTOR_RF_STEP, HIGH);
-    if(i < steps_LR) digitalWrite(MOTOR_LR_STEP, HIGH);
+    if(i < steps_FL) digitalWrite(MOTOR_FL_STEP, HIGH);
+    if(i < steps_RL) digitalWrite(MOTOR_RL_STEP, HIGH);
     if(i < steps_RR) digitalWrite(MOTOR_RR_STEP, HIGH);
+    if(i < steps_FR) digitalWrite(MOTOR_FR_STEP, HIGH);
     delayMicroseconds(stepDelay);
     
-    digitalWrite(MOTOR_LF_STEP, LOW);
-    digitalWrite(MOTOR_RF_STEP, LOW);
-    digitalWrite(MOTOR_LR_STEP, LOW);
+    digitalWrite(MOTOR_FL_STEP, LOW);
+    digitalWrite(MOTOR_RL_STEP, LOW);
     digitalWrite(MOTOR_RR_STEP, LOW);
+    digitalWrite(MOTOR_FR_STEP, LOW);
     delayMicroseconds(stepDelay);
   }
 }
@@ -284,10 +284,10 @@ void loop() {
     joystickToVelocity(nunchaku.joyX, nunchaku.joyY, v_x, v_y, omega);
     
     // 차체 속도 -> 바퀴 각속도
-    inverseKinematics(v_x, v_y, omega, omega_LF, omega_RF, omega_LR, omega_RR);
+    inverseKinematics(v_x, v_y, omega, omega_FL, omega_RL, omega_RR, omega_FR);
     
     // 로봇 이동 (dt = 0.05초)
-    moveRobot(omega_LF, omega_RF, omega_LR, omega_RR, 0.05);
+    moveRobot(omega_FL, omega_RL, omega_RR, omega_FR, 0.05);
     
     // LED 업데이트
     updateButtonLED();
