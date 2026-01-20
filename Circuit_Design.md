@@ -22,11 +22,11 @@ OLED 디스플레이는 실시간 상태 정보를 표시합니다.
 
 <br>
 
-<img src="pic/SCH_Schematic1_1-P1_2025-12-26.png" width="600px">
+<img src="pic/SCH_Schematic1_1-P1_2026-01-20.png" width="600px">
 
 <br>
 
-<img src="pic/screenshot2025-12-26 111624.png" width="600px">
+<img src="pic/screenshot 2026-01-20 155451.png" width="600px">
 
 <br>
 
@@ -132,4 +132,3 @@ DC-DC 컨버터는 아래 위치에 사용됩니다.
 
 
 
-18650 전원 사용이 문제네... 오픈소스로 만들려니 남들이 따라할 수 있게 제작하는게 골치아프다
