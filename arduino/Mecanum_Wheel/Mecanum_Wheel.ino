@@ -2,12 +2,12 @@
 // ESP32 DEVKIT 사용
 // Wii Nunchaku로 제어
 
-//#include <U8g2lib.h>
+#include <U8g2lib.h>
 #include <Wire.h>
 #include <FastLED.h>
 
 // U8G2 OLED 디스플레이 설정
-//U8G2_SSD1306_128X64_NONAME_F_HW_I2C u8g2(U8G2_R0, /* reset=*/ U8X8_PIN_NONE);
+U8G2_SSD1306_128X64_NONAME_F_HW_I2C u8g2(U8G2_R0, /* reset=*/ U8X8_PIN_NONE);
 
 // 핀 정의
 // Front Left Motor
