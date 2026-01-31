@@ -29,6 +29,9 @@ U8G2_SSD1306_128X64_NONAME_F_HW_I2C u8g2(U8G2_R0, /* reset=*/ U8X8_PIN_NONE);
 // 공통 ENABLE 핀
 #define ENABLE_PIN    27  // D27
 
+// 배터리 모니터링 핀
+#define BATTERY_PIN   34  // D34 (ADC1_CH6)
+
 // WS2812 LED 설정
 #define LED_PIN       23  // D23 (WS2812 출력)
 #define NUM_LEDS      1
@@ -82,6 +85,11 @@ float current_v_x = 0, current_v_y = 0, current_omega = 0;
 
 // 모터 속도 (rad/s)
 float omega_FL = 0, omega_RL = 0, omega_RR = 0, omega_FR = 0;
+
+// 배터리 저전압 상태
+bool isLowVolt = false;
+unsigned long lastBlinkTime = 0;
+bool ledBlinkState = false;
 
 // ========== Nunchaku 함수 (setup.h 포함 전에 정의) ==========
 
@@ -154,10 +162,19 @@ void setup() {
   pinMode(MOTOR_FR_DIR, OUTPUT);
   pinMode(MOTOR_FR_STEP, OUTPUT);
   pinMode(ENABLE_PIN, OUTPUT);
+  pinMode(BATTERY_PIN, INPUT);
   
   // WS2812 LED 초기화
   FastLED.addLeds<WS2812, LED_PIN, GRB>(leds, NUM_LEDS);
   FastLED.setBrightness(LED_BRIGHTNESS);
+  
+  // OLED 초기화
+  u8g2.begin();
+  u8g2.clearBuffer();
+  u8g2.setFont(u8g2_font_6x10_tr);
+  u8g2.drawStr(0, 10, "Mecanum Robot");
+  u8g2.drawStr(0, 25, "Initializing...");
+  u8g2.sendBuffer();
   
   // Nunchaku 초기화
   nunchakuInit();
@@ -366,7 +383,22 @@ void moveRobot(float w_FL, float w_RL, float w_RR, float w_FR, float dt) {
 
 // 버튼 상태에 따른 LED 색상
 void updateButtonLED() {
-  if(nunchaku.buttonC && nunchaku.buttonZ) {
+  // 저전압 상태: 1초 간격으로 빨간색 깜박임
+  if(isLowVolt) {
+    unsigned long currentTime = millis();
+    if(currentTime - lastBlinkTime >= 1000) {
+      lastBlinkTime = currentTime;
+      ledBlinkState = !ledBlinkState;
+    }
+    
+    if(ledBlinkState) {
+      leds[0] = CRGB(255, 0, 0);  // 빨강
+    } else {
+      leds[0] = CRGB(0, 0, 0);    // 꺼짐
+    }
+  }
+  // 정상 상태: 버튼에 따른 색상
+  else if(nunchaku.buttonC && nunchaku.buttonZ) {
     leds[0] = CRGB(255, 0, 255);  // 마젠타
   }
   else if(nunchaku.buttonC) {
@@ -379,6 +411,110 @@ void updateButtonLED() {
     leds[0] = CRGB(0, 255, 0);  // 초록 (정상 작동)
   }
   FastLED.show();
+}
+
+// 배터리 전압 읽기
+float readBatteryVoltage() {
+  // ADC 값 읽기 (0-4095, 12bit)
+  int adcValue = analogRead(BATTERY_PIN);
+  
+  // ESP32 ADC 참조 전압: 3.3V
+  // 전압 분배기 비율: R1=10k, R2=3.3k → 분배비 = 3.3/(10+3.3) = 0.2481
+  float voltage = (adcValue / 4095.0) * 3.3 / 0.2481;
+
+  // 저전압 체크 (11V 이하)
+  isLowVolt = (voltage < 11.0);
+  
+  return voltage;
+}
+
+// OLED에 조이스틱 방향 표시 (삼각형)
+void updateOLED() {
+  u8g2.clearBuffer();
+  
+  // 화면 중앙 좌표
+  int centerX = 64;
+  int centerY = 32;
+  int circleRadius = 25;
+  
+  // 조이스틱 값 정규화 (-1.0 ~ 1.0)
+  float joyX_norm = (nunchaku.joyX - JOY_CENTER) / 128.0;
+  float joyY_norm = (nunchaku.joyY - JOY_CENTER) / 128.0;
+  
+  // 데드존 적용
+  if(abs(joyX_norm) < (JOY_DEADZONE / 128.0)) joyX_norm = 0;
+  if(abs(joyY_norm) < (JOY_DEADZONE / 128.0)) joyY_norm = 0;
+  
+  // 중심 원 그리기
+  u8g2.drawCircle(centerX, centerY, circleRadius);
+  u8g2.drawCircle(centerX, centerY, 2);
+  
+  // 조이스틱 방향 계산 (magnitude)
+  float magnitude = sqrt(joyX_norm * joyX_norm + joyY_norm * joyY_norm);
+  
+  if(magnitude > 0.1) {
+    // 방향 벡터 (정규화)
+    float dirX = joyX_norm / magnitude;
+    float dirY = -joyY_norm / magnitude;  // Y축 반전 (화면 좌표계)
+    
+    // magnitude를 1.0으로 제한
+    if(magnitude > 1.0) magnitude = 1.0;
+    
+    // 삼각형 끝점 (방향)
+    int tipX = centerX + dirX * circleRadius * magnitude;
+    int tipY = centerY + dirY * circleRadius * magnitude;
+    
+    // 삼각형 밑변 좌표 (방향에 수직)
+    float perpX = -dirY;  // 수직 벡터
+    float perpY = dirX;
+    int baseSize = 5;
+    
+    int base1X = centerX + perpX * baseSize;
+    int base1Y = centerY + perpY * baseSize;
+    int base2X = centerX - perpX * baseSize;
+    int base2Y = centerY - perpY * baseSize;
+    
+    // 삼각형 그리기 (채워진 삼각형)
+    u8g2.drawTriangle(tipX, tipY, base1X, base1Y, base2X, base2Y);
+  }
+  
+  // 조이스틱 좌표 표시 (상단 중앙)
+  u8g2.setFont(u8g2_font_6x10_tr);
+  char joyBuf[20];
+  sprintf(joyBuf, "X:%d Y:%d", nunchaku.joyX, nunchaku.joyY);
+  int joyStrWidth = strlen(joyBuf) * 6;  // 폰트 너비 6픽셀
+  u8g2.drawStr((128 - joyStrWidth) / 2, 10, joyBuf);
+  
+  // 버튼 상태 표시 (좌측 하단 2줄)
+  // Z 버튼 (첫 번째 줄)
+  if(nunchaku.buttonZ) {
+    u8g2.drawStr(0, 53, "Z:ON");
+  } else {
+    u8g2.drawStr(0, 53, "Z:OFF");
+  }
+  // C 버튼 (두 번째 줄)
+  if(nunchaku.buttonC) {
+    u8g2.drawStr(0, 63, "C:ON");
+  } else {
+    u8g2.drawStr(0, 63, "C:OFF");
+  }
+  
+  // 배터리 전압 표시 (우측 하단)
+  float battVolt = readBatteryVoltage();
+  char battBuf[15];
+  sprintf(battBuf, "%.1fV", battVolt);
+  int battStrWidth = strlen(battBuf) * 6;  // 폰트 너비 6픽셀
+  u8g2.drawStr(128 - battStrWidth, 63, battBuf);
+  
+  // 저전압 경고 표시 (화면 중앙)
+  if(isLowVolt) {
+    u8g2.setFont(u8g2_font_9x15_tr);  // 큰 폰트
+    const char* warningText = "LOW VOLT";
+    int textWidth = strlen(warningText) * 9;
+    u8g2.drawStr((128 - textWidth) / 2, 35, warningText);
+  }
+  
+  u8g2.sendBuffer();
 }
 
 void loop() {
@@ -412,5 +548,8 @@ void loop() {
     
     // LED 업데이트
     updateButtonLED();
+    
+    // OLED 업데이트
+    updateOLED(); //여기서 문제가 생김. 수정해야 함
   }
 }
