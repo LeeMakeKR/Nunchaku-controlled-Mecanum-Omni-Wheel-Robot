@@ -71,8 +71,8 @@ const float MIN_STEP_DELAY_US = 50;    // 최소 스텝 딜레이 (μs) - 최대
 const int JOY_CENTER = 128;
 const int JOY_DEADZONE = 20;
 const int JOY_THRESHOLD = 20;  // 셋업 모드용
-const float MAX_VELOCITY = 15.0;       // mm/s (최대 속도)
-const float MAX_ACCELERATION = 50.0;   // mm/s^2 (최대 가속도)
+const float MAX_VELOCITY = 12.0;       // mm/s (최대 속도)
+const float MAX_ACCELERATION = 1.5;   // mm/s^2 (최대 가속도)
 
 // 가속도계 데드존 (변수로 설정하여 수정 가능)
 int ACCEL_DEADZONE = 10;  // 중심값 512 ± 10 범위는 무시
