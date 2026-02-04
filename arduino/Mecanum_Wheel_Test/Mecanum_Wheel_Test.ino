@@ -12,13 +12,13 @@
 U8G2_SSD1306_128X64_NONAME_F_HW_I2C u8g2(U8G2_R0, /* reset=*/ U8X8_PIN_NONE);
 
 // 핀 정의
-// Front Left Motor
-#define MOTOR_FL_DIR    21
-#define MOTOR_FL_STEP   22
+// Front Left Motor (RX2/TX2)
+#define MOTOR_FL_DIR    16  // RX2
+#define MOTOR_FL_STEP   17  // TX2
 
 // Rear Left Motor
-#define MOTOR_RL_DIR    24
-#define MOTOR_RL_STEP   25
+#define MOTOR_RL_DIR    18
+#define MOTOR_RL_STEP   19
 
 // Rear Right Motor
 #define MOTOR_RR_DIR    13
@@ -160,6 +160,10 @@ MotorUnderTest currentMotor = MOTOR_TEST_FL;
 int motorStepCount = 0;  // 현재 스텝 카운트
 int motorRevolutionCount = 0;  // 1회전 카운트
 
+// ========== 함수 전방 선언 ==========
+void displayInfo(const char* title, const char* line1, const char* line2 = "", const char* line3 = "");
+void displayYesNo(const char* question, bool yesSelected);
+
 // ========== 초기화 함수 ==========
 
 void setup() {
@@ -183,6 +187,16 @@ void setup() {
   pinMode(MOTOR_FR_DIR, OUTPUT);
   pinMode(MOTOR_FR_STEP, OUTPUT);
   pinMode(ENABLE_PIN, OUTPUT);
+  
+  // 모든 스텝 핀과 방향 핀 초기화
+  digitalWrite(MOTOR_FL_DIR, LOW);
+  digitalWrite(MOTOR_FL_STEP, LOW);
+  digitalWrite(MOTOR_RL_DIR, LOW);
+  digitalWrite(MOTOR_RL_STEP, LOW);
+  digitalWrite(MOTOR_RR_DIR, LOW);
+  digitalWrite(MOTOR_RR_STEP, LOW);
+  digitalWrite(MOTOR_FR_DIR, LOW);
+  digitalWrite(MOTOR_FR_STEP, LOW);
   
   // 모터 비활성화 (안전)
   digitalWrite(ENABLE_PIN, HIGH);
@@ -398,7 +412,6 @@ void displayMenu() {
   u8g2.setFont(u8g2_font_ncenB08_tr);
   u8g2.drawStr(0, 10, "=== Test Menu ===");
   
-  int y = 25;
   const char* menuItems[] = {
     "LED Test",
     "Joystick Test",
@@ -406,7 +419,17 @@ void displayMenu() {
     "Exit"
   };
   
-  for(int i = 0; i < MENU_COUNT; i++) {
+  // 3줄만 표시하도록 스크롤 계산
+  const int MAX_VISIBLE_ITEMS = 3;
+  int scrollOffset = 0;
+  
+  // 현재 선택된 항목이 보이도록 스크롤 조정
+  if(currentMenu >= MAX_VISIBLE_ITEMS) {
+    scrollOffset = currentMenu - MAX_VISIBLE_ITEMS + 1;
+  }
+  
+  int y = 25;
+  for(int i = scrollOffset; i < min(scrollOffset + MAX_VISIBLE_ITEMS, (int)MENU_COUNT); i++) {
     if(i == currentMenu) {
       u8g2.drawStr(0, y, ">");
     }
@@ -418,7 +441,7 @@ void displayMenu() {
   u8g2.sendBuffer();
 }
 
-void displayInfo(const char* title, const char* line1, const char* line2 = "", const char* line3 = "") {
+void displayInfo(const char* title, const char* line1, const char* line2, const char* line3) {
   u8g2.clearBuffer();
   u8g2.setFont(u8g2_font_ncenB08_tr);
   u8g2.drawStr(0, 10, title);
@@ -467,7 +490,6 @@ void testOLED() {
 
 // 2. 조이스틱 기본 테스트
 void testJoystickBasic() {
-  static bool testComplete = false;
   static unsigned long startTime = 0;
   static bool joyMoved = false;
   
@@ -511,6 +533,7 @@ void testJoystickBasic() {
 // 3. 메인 메뉴
 void mainMenu() {
   static unsigned long lastUpdate = 0;
+  static int prevJoyY = JOY_CENTER;
   
   if(millis() - lastUpdate > 100) {
     displayMenu();
@@ -518,20 +541,20 @@ void mainMenu() {
   }
   
   if(nunchakuRead()) {
-    // 조이스틱 상하로 메뉴 선택
-    if(nunchaku.joyY < JOY_CENTER - JOY_THRESHOLD) {
-      // 위로 (이전 메뉴)
-      if(currentMenu > 0) {
-        currentMenu = (MenuItem)((int)currentMenu - 1);
-        delay(200);
-      }
-    } else if(nunchaku.joyY > JOY_CENTER + JOY_THRESHOLD) {
+    // 조이스틱 상하로 메뉴 선택 (방향 수정: 아래로 내리면 아래 메뉴로)
+    if(nunchaku.joyY < JOY_CENTER - JOY_THRESHOLD && prevJoyY >= JOY_CENTER - JOY_THRESHOLD) {
       // 아래로 (다음 메뉴)
       if(currentMenu < MENU_COUNT - 1) {
         currentMenu = (MenuItem)((int)currentMenu + 1);
-        delay(200);
+      }
+    } else if(nunchaku.joyY > JOY_CENTER + JOY_THRESHOLD && prevJoyY <= JOY_CENTER + JOY_THRESHOLD) {
+      // 위로 (이전 메뉴)
+      if(currentMenu > 0) {
+        currentMenu = (MenuItem)((int)currentMenu - 1);
       }
     }
+    
+    prevJoyY = nunchaku.joyY;
     
     // C 버튼으로 선택
     if(buttonCPressed()) {
@@ -539,7 +562,8 @@ void mainMenu() {
         case MENU_LED_TEST:
           currentState = TEST_LED;
           ledColorIndex = 0;
-          ledBrightness = 50;
+          ledBrightnessLevel = 1;  // Index 1 = 50 brightness
+          FastLED.setBrightness(LED_BRIGHTNESS_LEVELS[ledBrightnessLevel]);
           break;
         case MENU_JOYSTICK_TEST:
           currentState = TEST_JOYSTICK_FULL;
@@ -551,6 +575,9 @@ void mainMenu() {
           break;
         case MENU_EXIT:
           currentState = TEST_COMPLETE;
+          break;
+        case MENU_COUNT:
+          // This case should never be reached
           break;
       }
     }
@@ -572,9 +599,9 @@ void testLED() {
     }
     
     // 상하로 밝기 변경 (5단계)
-    if(nunchaku.joyY < JOY_CENTER - JOY_THRESHOLD && prevJoyY >= JOY_CENTER - JOY_THRESHOLD) {
+    if(nunchaku.joyY > JOY_CENTER + JOY_THRESHOLD && prevJoyY <= JOY_CENTER + JOY_THRESHOLD) {
       ledBrightnessLevel = min(4, ledBrightnessLevel + 1);  // 위: 밝게
-    } else if(nunchaku.joyY > JOY_CENTER + JOY_THRESHOLD && prevJoyY <= JOY_CENTER + JOY_THRESHOLD) {
+    } else if(nunchaku.joyY < JOY_CENTER - JOY_THRESHOLD && prevJoyY >= JOY_CENTER - JOY_THRESHOLD) {
       ledBrightnessLevel = max(0, ledBrightnessLevel - 1);   // 아래: 어둡게
     }
     
@@ -612,6 +639,7 @@ void testLED() {
 // 5. 조이스틱 전체 테스트 (서브메뉴)
 void testJoystickFull() {
   static unsigned long lastUpdate = 0;
+  static int prevJoyY = JOY_CENTER;
   
   // 서브메뉴 표시
   if(millis() - lastUpdate > 100) {
@@ -643,18 +671,20 @@ void testJoystickFull() {
   }
   
   if(nunchakuRead()) {
-    // 조이스틱 상하로 메뉴 선택
-    if(nunchaku.joyY < JOY_CENTER - JOY_THRESHOLD) {
+    // 조이스틱 상하로 메뉴 선택 (위로 올리면 위로, 아래로 내리면 아래로)
+    if(nunchaku.joyY > JOY_CENTER + JOY_THRESHOLD && prevJoyY <= JOY_CENTER + JOY_THRESHOLD) {
+      // 위로 (이전 메뉴)
       if(currentJoyMenu > 0) {
         currentJoyMenu = (JoystickSubMenu)((int)currentJoyMenu - 1);
-        delay(200);
       }
-    } else if(nunchaku.joyY > JOY_CENTER + JOY_THRESHOLD) {
+    } else if(nunchaku.joyY < JOY_CENTER - JOY_THRESHOLD && prevJoyY >= JOY_CENTER - JOY_THRESHOLD) {
+      // 아래로 (다음 메뉴)
       if(currentJoyMenu < JOY_SUB_COUNT) {  // EXIT 포함 5개 항목
         currentJoyMenu = (JoystickSubMenu)((int)currentJoyMenu + 1);
-        delay(200);
       }
     }
+    
+    prevJoyY = nunchaku.joyY;
     
     // C 버튼으로 선택
     if(buttonCPressed()) {
@@ -1021,6 +1051,14 @@ void testMotor() {
   static unsigned long lastUpdate = 0;
   static int prevJoyX = JOY_CENTER;
   static int prevJoyY = JOY_CENTER;
+  static bool motorEnabled = false;
+  
+  // 모터 활성화 (처음 한 번만)
+  if(!motorEnabled) {
+    digitalWrite(ENABLE_PIN, LOW);  // 모터 활성화
+    motorEnabled = true;
+    Serial.println("Motor ENABLED");
+  }
   
   const char* motorNames[] = {"FL", "RL", "RR", "FR"};
   
@@ -1036,11 +1074,18 @@ void testMotor() {
       motorRevolutionCount = 0;
     }
     
-    // 위로 움직일 때 200스텝 CW 회전
+    // 위로 움직일 때 1600스텝 CW 회전 (200*8)
+    if(nunchaku.joyY > JOY_CENTER + JOY_THRESHOLD && prevJoyY <= JOY_CENTER + JOY_THRESHOLD) {
+      displayInfo("Motor Test", "CW Running...", motorNames[currentMotor], "");
+      runMotorSteps(currentMotor, true, 1600);
+      motorStepCount += 1600;
+    }
+    
+    // 아래로 움직일 때 1600스텝 CCW 회전 (200*8)
     if(nunchaku.joyY < JOY_CENTER - JOY_THRESHOLD && prevJoyY >= JOY_CENTER - JOY_THRESHOLD) {
-      displayInfo("Motor Test", "Running...", motorNames[currentMotor], "");
-      runMotorSteps(currentMotor, true, 200);
-      motorStepCount += 200;
+      displayInfo("Motor Test", "CCW Running...", motorNames[currentMotor], "");
+      runMotorSteps(currentMotor, false, 1600);
+      motorStepCount += 1600;
     }
     
     prevJoyX = nunchaku.joyX;
@@ -1091,7 +1136,7 @@ void testMotor() {
       char buf1[32], buf2[32], buf3[32];
       sprintf(buf1, "Motor: %s", motorNames[currentMotor]);
       sprintf(buf2, "Steps: %d", motorStepCount);
-      sprintf(buf3, "Up:+200 C:1Rev");
+      sprintf(buf3, "Up:CW Dn:CCW");
       
       u8g2.clearBuffer();
       u8g2.setFont(u8g2_font_ncenB08_tr);
@@ -1121,6 +1166,8 @@ void testMotor() {
     // Z 버튼으로 메뉴 복귀
     if(buttonZPressed()) {
       digitalWrite(ENABLE_PIN, HIGH);  // 모터 비활성화
+      motorEnabled = false;  // 플래그 리셋
+      Serial.println("Motor DISABLED");
       currentState = MAIN_MENU;
     }
   }
@@ -1128,6 +1175,7 @@ void testMotor() {
 
 void runMotorSteps(MotorUnderTest motor, bool clockwise, int steps) {
   int dirPin, stepPin;
+  const char* motorNames[] = {"FL", "RL", "RR", "FR"};
   
   switch(motor) {
     case MOTOR_TEST_FL:
@@ -1150,8 +1198,25 @@ void runMotorSteps(MotorUnderTest motor, bool clockwise, int steps) {
       return;
   }
   
-  // 방향 설정
-  digitalWrite(dirPin, clockwise ? HIGH : LOW);
+  Serial.printf("Running Motor %s: %d steps, dir=%d (pin %d), step pin %d\n", 
+                motorNames[motor], steps, clockwise, dirPin, stepPin);
+  
+  // 방향 설정 (L모터: HIGH=정회전, R모터: LOW=정회전)
+  bool dirSignal;
+  if(motor == MOTOR_TEST_FL || motor == MOTOR_TEST_RL) {
+    // 왼쪽 모터: clockwise 그대로 사용
+    dirSignal = clockwise;
+  } else {
+    // 오른쪽 모터 (RR, FR): clockwise 반대로 사용
+    dirSignal = !clockwise;
+  }
+  
+  digitalWrite(dirPin, dirSignal ? HIGH : LOW);
+  delayMicroseconds(10);  // 방향 설정 안정화
+  
+  // 스텝 핀이 LOW인지 확인
+  digitalWrite(stepPin, LOW);
+  delayMicroseconds(10);
   
   // 스텝 실행
   for(int i = 0; i < steps; i++) {
@@ -1161,7 +1226,7 @@ void runMotorSteps(MotorUnderTest motor, bool clockwise, int steps) {
     delayMicroseconds(500);
   }
   
-  Serial.printf("Motor %d: +%d steps (Total: %d)\n", motor, steps, motorStepCount + steps);
+  Serial.printf("Motor %s: Completed %d steps\n", motorNames[motor], steps);
 }
 
 // 7. 테스트 완료
