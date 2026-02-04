@@ -99,6 +99,12 @@ I2C 방식으로 신호를 주고받으며 아두이노 라이브러리를 통�
 <br>
 
 
+## 테스트 영상
+
+2026.2.4 - XY 이동 테스트 영상
+https://www.youtube.com/watch?v=TVuuHdsmRso
+
+
 
 
 
