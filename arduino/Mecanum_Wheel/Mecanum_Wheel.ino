@@ -87,7 +87,7 @@ const float MAX_ACCELERATION = 1.5;   // mm/s^2 (최대 가속도)
 const float MAX_OMEGA = MAX_VELOCITY / L_SUM;  // rad/s
 
 // 가속도계(기울임 -> 회전) 파라미터
-// 아래 3개 값은 실측 후 조정해야 한다. DEBUG_TODO.md P1-7 참조.
+// 아래 값들은 실측 후 조정해야 한다.
 int ACCEL_DEADZONE = 20;                    // 중심 부근 무시 범위 (카운트)
 const int ACCEL_X_CENTER = 512;             // 좌우 수평일 때의 accelX
 const float ACCEL_COUNTS_PER_G = 200.0;     // 1g당 카운트
@@ -112,6 +112,14 @@ bool ledBlinkState = false;
 float cachedBattVolt = 0;
 unsigned long lastBatteryReadTime = 0;
 const unsigned long BATTERY_READ_INTERVAL = 1000;  // 1초마다 배터리 읽기
+
+// 배터리 측정 파라미터
+const int BATTERY_SAMPLE_COUNT = 10;            // 평균에 사용할 샘플 수
+const int BATTERY_SAMPLE_INTERVAL_US = 200;     // 샘플 간 간격
+const int BATTERY_ADC_SATURATED = 4000;         // 이 값 이상은 만충(측정 상한 부근)으로 보고 제외
+const float LOW_VOLTAGE_THRESHOLD = 10.0;       // 이 값 이하이면 저전압 진입
+const float LOW_VOLTAGE_RECOVER = 10.3;         // 이 값 이상이면 저전압 해제 (히스테리시스)
+const unsigned long LOW_VOLT_BLINK_INTERVAL = 250;  // 저전압 + 주행 시 LED 점멸 주기 (ms)
 
 // 배터리 전압 계산 상수
 const float ADC_MAX = 4095.0;
@@ -182,6 +190,45 @@ bool nunchakuRead() {
   return false;
 }
 
+// ========== 배터리 전압 ==========
+
+// 배터리 전압을 측정하고 저전압 상태를 갱신한다.
+// 반드시 모터가 비활성인 상태에서만 호출할 것.
+// 주행 중에는 순간 4~5A의 부하로 전압이 크게 강하해 저전압을 오검출한다.
+void updateBatteryVoltage() {
+  long sum = 0;
+  int validCount = 0;
+
+  for(int i = 0; i < BATTERY_SAMPLE_COUNT; i++) {
+    int raw = analogRead(BATTERY_PIN);
+
+    // 만충 부근에서는 ADC가 상한에 붙어 값이 의미가 없으므로 평균에서 제외한다.
+    // (분압비 0.2481에서 측정 가능 상한은 약 12.5V)
+    if(raw < BATTERY_ADC_SATURATED) {
+      sum += raw;
+      validCount++;
+    }
+
+    delayMicroseconds(BATTERY_SAMPLE_INTERVAL_US);
+  }
+
+  // 유효 샘플이 하나도 없으면 만충 상태다. 저전압일 수 없다.
+  if(validCount == 0) {
+    cachedBattVolt = ADC_MAX * BATTERY_CONVERSION;  // 측정 상한값으로 표시
+    isLowVolt = false;
+    return;
+  }
+
+  cachedBattVolt = (sum / (float)validCount) * BATTERY_CONVERSION;
+
+  // 임계값 근처에서 상태가 떨리지 않도록 진입/해제 값을 다르게 둔다.
+  if(cachedBattVolt <= LOW_VOLTAGE_THRESHOLD) {
+    isLowVolt = true;
+  } else if(cachedBattVolt >= LOW_VOLTAGE_RECOVER) {
+    isLowVolt = false;
+  }
+}
+
 // setup.h 포함 (이전 변수들이 정의된 후에 포함)
 #include "setup.h"  // 셋업 모드 포함
 
@@ -227,6 +274,12 @@ void setup() {
   
   // 배터리 전압 계산 계수 미리 계산
   BATTERY_CONVERSION = VOLTAGE_CONVERSION_FACTOR / ADC_MAX;
+
+  // 부팅 직후 1회 측정 (이 시점에는 모터가 확실히 비활성이다)
+  updateBatteryVoltage();
+  Serial.print("Battery: ");
+  Serial.print(cachedBattVolt, 2);
+  Serial.println(isLowVolt ? " V  (LOW)" : " V");
 
   // 모터는 여기서 활성화하지 않는다.
   // 유효한 Nunchaku 응답과 Z 버튼 입력이 확인된 뒤 loop()에서 활성화한다.
@@ -304,7 +357,6 @@ float accelerometerToOmega(int accelX) {
 
 // 가속도계 기울임을 차체 속도로 변환
 // [미사용] 기울임은 회전(accelerometerToOmega)에 배정되어 이 함수는 호출되지 않는다.
-//          정리 여부는 DEBUG_TODO.md P4-4 참조.
 void accelerometerToVelocity(int accelX, int accelY, int accelZ, float &v_x, float &v_y, float &omega) {
   // Nunchaku 가속도계 범위: 0-1023 (중립값: 512)
   // 기울임 각도 계산 (라디안)
@@ -453,18 +505,22 @@ void moveRobot(float w_FL, float w_RL, float w_RR, float w_FR, float dt) {
 
 // 버튼 상태에 따른 LED 색상
 void updateButtonLED() {
-  // 저전압 상태: 1초 간격으로 빨간색 깜박임
+  // 저전압 상태 (버튼 색상보다 우선)
+  //   정지 중  : 빨강 상시 점등
+  //   Z 입력 중 : 빨강 점멸 (저전압인데 주행하려는 상태)
   if(isLowVolt) {
-    unsigned long currentTime = millis();
-    if(currentTime - lastBlinkTime >= 1000) {
-      lastBlinkTime = currentTime;
-      ledBlinkState = !ledBlinkState;
-    }
-    
-    if(ledBlinkState) {
-      leds[0] = CRGB(255, 0, 0);  // 빨강
+    if(nunchaku.buttonZ) {
+      unsigned long currentTime = millis();
+      if(currentTime - lastBlinkTime >= LOW_VOLT_BLINK_INTERVAL) {
+        lastBlinkTime = currentTime;
+        ledBlinkState = !ledBlinkState;
+      }
+      leds[0] = ledBlinkState ? CRGB(255, 0, 0) : CRGB(0, 0, 0);
     } else {
-      leds[0] = CRGB(0, 0, 0);    // 꺼짐
+      // 다음에 Z를 눌렀을 때 점등부터 시작하도록 초기화
+      lastBlinkTime = millis();
+      ledBlinkState = true;
+      leds[0] = CRGB(255, 0, 0);
     }
   }
   // 정상 상태: 버튼에 따른 색상
@@ -527,14 +583,14 @@ void loop() {
     updateButtonLED();
 
     // 배터리 전압 업데이트 (1초마다 한 번)
-    if(currentTime - lastBatteryReadTime >= BATTERY_READ_INTERVAL) {
+    // 모터가 비활성일 때만 측정한다. Z를 누르고 주행 중이면 직전 값을 유지한다.
+    if(!motorsEnabled && currentTime - lastBatteryReadTime >= BATTERY_READ_INTERVAL) {
       lastBatteryReadTime = currentTime;
-      cachedBattVolt = analogRead(BATTERY_PIN) * BATTERY_CONVERSION;
-      isLowVolt = (cachedBattVolt < 11.0);
+      updateBatteryVoltage();
     }
   } else {
     // Nunchaku 응답이 없으면 조작 입력이 없는 것으로 보고 드라이버를 비활성화한다.
-    // (통신 실패 시 속도 상태 리셋과 재초기화는 DEBUG_TODO.md P0-3 항목에서 처리)
+    // (통신 실패 시 속도 상태 리셋과 넌차쿠 재초기화는 아직 미구현)
     setMotorsEnabled(false);
   }
 }

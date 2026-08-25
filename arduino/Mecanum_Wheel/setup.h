@@ -1,5 +1,5 @@
 // setup.h - 셋업 모드 통합 헤더
-// Mecanum_Wheel_Test.ino의 모든 기능을 포함
+// OLED 기반 셋업/캘리브레이션 기능이 있었으나 현재는 대부분 비활성 상태다.
 
 #ifndef SETUP_H
 #define SETUP_H

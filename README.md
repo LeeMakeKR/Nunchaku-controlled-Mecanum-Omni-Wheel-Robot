@@ -55,8 +55,6 @@ XYZ 3방향 이동과 Z축 회전(yaw)을 조합하여 로봇의 움직임을 �
 
 차체의 거동에 관한 수학적 계산은 [Mecanum_calc.md](Mecanum_calc.md)와 [OmniWheel_calc.md](OmniWheel_calc.md)를 참조하세요.
 
-펌웨어와 하드웨어 검증 항목은 [DEBUG_TODO.md](DEBUG_TODO.md)를 참조하세요.
-
 
 - **3각형 바디 베이스**: 3개의 스텝모터와 옴니휠
 - **4각형 바디 베이스**: 4개의 스텝모터와 메카넘 휠
@@ -115,7 +113,6 @@ https://www.youtube.com/watch?v=TVuuHdsmRso
 # 차후 수정 목록
 
 현재 리비전에서는 수정할 수 없어 다음 하드웨어 리비전으로 넘긴 항목입니다.
-펌웨어에서 확인 중인 항목은 [DEBUG_TODO.md](DEBUG_TODO.md)를 참조하세요.
 
 ### 1. TMC2209 EN 네트에 풀업 저항 추가 (PCB 수정 필요)
 
@@ -127,4 +124,3 @@ https://www.youtube.com/watch?v=TVuuHdsmRso
 - 효과: 펌웨어가 시작되기 전까지 드라이버가 확실히 비활성 상태로 유지됨
 - 참고: 펌웨어 쪽에서는 부팅 직후 출력 래치를 HIGH로 올린 뒤 `pinMode()`를 호출하도록
   이미 수정되어 있으나, `setup()` 진입 이전 구간은 하드웨어로만 해결할 수 있습니다.
-- 관련 항목: `DEBUG_TODO.md` P0-2

@@ -94,8 +94,8 @@ digitalWrite(MOTOR_RF_DIR, dir_RF ? LOW : HIGH);
 # 3. Upload Speed: 921600
 # 4. 라이브러리: FastLED, U8g2, Wire (내장)
 
-# 모터 단독 테스트: arduino/teststepdriver/teststepdriver.ino 사용
-# 전체 제어: arduino/Mecanum_Wheel/Mecanum_Wheel.ino
+# 4륜 메카넘: arduino/Mecanum_Wheel/Mecanum_Wheel.ino
+# 3륜 옴니(Kiwi): arduino/Omni_Wheel/Omni_Wheel.ino
 ```
 
 ### TMC2209 마이크로스테핑 설정

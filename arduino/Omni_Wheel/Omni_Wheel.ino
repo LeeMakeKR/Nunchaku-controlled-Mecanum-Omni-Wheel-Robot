@@ -5,10 +5,10 @@
 // 역기구학 근거: OmniWheel_calc.md 3~5장 (접선 구동 Kiwi, 정삼각형 120도 배치)
 // 조작: 조이스틱 = XY 이동 / 넌차쿠 좌우 기울임 = 제자리 회전 / Z 버튼 = 주행 허용
 //
-// [Mecanum_Wheel.ino와 공유하는 미해결 항목 - DEBUG_TODO.md 참조]
-//  - P1-1: dt = 0.1 이 실제 루프 주기와 무관한 상수다. 실측 후 두 스케치를 함께 수정할 것.
-//  - P1-2: 스텝 계산의 소수점 버림으로 저속 입력이 사라진다.
-//  - P3-1: 배터리 ADC가 만충(12.6V) 부근에서 포화된다.
+// [Mecanum_Wheel.ino와 공유하는 미해결 항목]
+//  - dt = 0.1 이 실제 루프 주기와 무관한 상수다. 실측 후 두 스케치를 함께 수정할 것.
+//  - 스텝 계산의 소수점 버림으로 저속 입력이 사라진다.
+//  - 배터리 ADC가 만충(12.6V) 부근에서 포화된다. 측정 상한은 약 12.5V.
 
 #include <Wire.h>
 #include <FastLED.h>
@@ -80,7 +80,7 @@ struct NunchakuData {
 NunchakuData nunchaku;
 
 // ========== 차체 파라미터 ==========
-// 아래 2개는 실측 후 반드시 수정할 것. DEBUG_TODO.md 참조.
+// 아래 2개는 실측 후 반드시 수정할 것.
 const float WHEEL_DIAMETER = 65.0;      // 옴니휠 지름 (mm) - 실측 필요
 const float WHEEL_RADIUS = WHEEL_DIAMETER / 2.0;
 const float ROBOT_RADIUS = 100.0;       // 차체 중심 ~ 휠 중심 거리 R (mm) - 실측 필요
@@ -111,7 +111,7 @@ const float MAX_ACCELERATION = 1.5;     // mm/s^2 (최대 가속도)
 const float MAX_OMEGA = MAX_VELOCITY / ROBOT_RADIUS;  // rad/s
 
 // 가속도계(기울임 -> 회전) 파라미터
-// 아래 값들은 실측 후 조정해야 한다. DEBUG_TODO.md P1-7 참조.
+// 아래 값들은 실측 후 조정해야 한다.
 const int ACCEL_DEADZONE = 20;              // 중심 부근 무시 범위 (카운트)
 const int ACCEL_X_CENTER = 512;             // 좌우 수평일 때의 accelX
 const float ACCEL_COUNTS_PER_G = 200.0;     // 1g당 카운트
@@ -140,6 +140,14 @@ bool ledBlinkState = false;
 float cachedBattVolt = 0;
 unsigned long lastBatteryReadTime = 0;
 const unsigned long BATTERY_READ_INTERVAL = 1000;  // 1초마다 배터리 읽기
+
+// 배터리 측정 파라미터
+const int BATTERY_SAMPLE_COUNT = 10;            // 평균에 사용할 샘플 수
+const int BATTERY_SAMPLE_INTERVAL_US = 200;     // 샘플 간 간격
+const int BATTERY_ADC_SATURATED = 4000;         // 이 값 이상은 만충(측정 상한 부근)으로 보고 제외
+const float LOW_VOLTAGE_THRESHOLD = 10.0;       // 이 값 이하이면 저전압 진입
+const float LOW_VOLTAGE_RECOVER = 10.3;         // 이 값 이상이면 저전압 해제 (히스테리시스)
+const unsigned long LOW_VOLT_BLINK_INTERVAL = 250;  // 저전압 + 주행 시 LED 점멸 주기 (ms)
 
 // 배터리 전압 계산 상수 (R12 = 10k / R13 = 3.3k 분압)
 const float ADC_MAX = 4095.0;
@@ -417,19 +425,66 @@ void moveRobot(float w_A, float w_B, float w_C, float dt) {
   }
 }
 
+// ========== 배터리 전압 ==========
+
+// 배터리 전압을 측정하고 저전압 상태를 갱신한다.
+// 반드시 모터가 비활성인 상태에서만 호출할 것.
+// 주행 중에는 순간 4~5A의 부하로 전압이 크게 강하해 저전압을 오검출한다.
+void updateBatteryVoltage() {
+  long sum = 0;
+  int validCount = 0;
+
+  for(int i = 0; i < BATTERY_SAMPLE_COUNT; i++) {
+    int raw = analogRead(BATTERY_PIN);
+
+    // 만충 부근에서는 ADC가 상한에 붙어 값이 의미가 없으므로 평균에서 제외한다.
+    // (분압비 0.2481에서 측정 가능 상한은 약 12.5V)
+    if(raw < BATTERY_ADC_SATURATED) {
+      sum += raw;
+      validCount++;
+    }
+
+    delayMicroseconds(BATTERY_SAMPLE_INTERVAL_US);
+  }
+
+  // 유효 샘플이 하나도 없으면 만충 상태다. 저전압일 수 없다.
+  if(validCount == 0) {
+    cachedBattVolt = ADC_MAX * BATTERY_CONVERSION;  // 측정 상한값으로 표시
+    isLowVolt = false;
+    return;
+  }
+
+  cachedBattVolt = (sum / (float)validCount) * BATTERY_CONVERSION;
+
+  // 임계값 근처에서 상태가 떨리지 않도록 진입/해제 값을 다르게 둔다.
+  if(cachedBattVolt <= LOW_VOLTAGE_THRESHOLD) {
+    isLowVolt = true;
+  } else if(cachedBattVolt >= LOW_VOLTAGE_RECOVER) {
+    isLowVolt = false;
+  }
+}
+
 // ========== 상태 표시 ==========
 
 // 버튼 및 배터리 상태에 따른 LED 색상
 void updateStatusLED() {
-  // 저전압 상태: 1초 간격으로 빨간색 깜박임
+  // 저전압 상태 (버튼 색상보다 우선)
+  //   정지 중  : 빨강 상시 점등
+  //   Z 입력 중 : 빨강 점멸 (저전압인데 주행하려는 상태)
   if(isLowVolt) {
-    unsigned long currentTime = millis();
-    if(currentTime - lastBlinkTime >= 1000) {
-      lastBlinkTime = currentTime;
-      ledBlinkState = !ledBlinkState;
+    if(nunchaku.buttonZ) {
+      unsigned long currentTime = millis();
+      if(currentTime - lastBlinkTime >= LOW_VOLT_BLINK_INTERVAL) {
+        lastBlinkTime = currentTime;
+        ledBlinkState = !ledBlinkState;
+      }
+      leds[0] = ledBlinkState ? CRGB(255, 0, 0) : CRGB(0, 0, 0);
+    } else {
+      // 다음에 Z를 눌렀을 때 점등부터 시작하도록 초기화
+      lastBlinkTime = millis();
+      ledBlinkState = true;
+      leds[0] = CRGB(255, 0, 0);
     }
-
-    leds[0] = ledBlinkState ? CRGB(255, 0, 0) : CRGB(0, 0, 0);
   }
   // 정상 상태: 버튼에 따른 색상
   else if(nunchaku.buttonC && nunchaku.buttonZ) {
@@ -494,6 +549,12 @@ void setup() {
   // 배터리 전압 계산 계수 미리 계산
   BATTERY_CONVERSION = VOLTAGE_CONVERSION_FACTOR / ADC_MAX;
 
+  // 부팅 직후 1회 측정 (이 시점에는 모터가 확실히 비활성이다)
+  updateBatteryVoltage();
+  Serial.print("Battery: ");
+  Serial.print(cachedBattVolt, 2);
+  Serial.println(isLowVolt ? " V  (LOW)" : " V");
+
   // 모터는 여기서 활성화하지 않는다.
   // 유효한 Nunchaku 응답과 Z 버튼 입력이 확인된 뒤 loop()에서 활성화한다.
   Serial.println("Omni wheel (Kiwi drive) ready.");
@@ -542,10 +603,10 @@ void loop() {
     updateStatusLED();
 
     // 배터리 전압 업데이트 (1초마다 한 번)
-    if(currentTime - lastBatteryReadTime >= BATTERY_READ_INTERVAL) {
+    // 모터가 비활성일 때만 측정한다. Z를 누르고 주행 중이면 직전 값을 유지한다.
+    if(!motorsEnabled && currentTime - lastBatteryReadTime >= BATTERY_READ_INTERVAL) {
       lastBatteryReadTime = currentTime;
-      cachedBattVolt = analogRead(BATTERY_PIN) * BATTERY_CONVERSION;
-      isLowVolt = (cachedBattVolt < 11.0);
+      updateBatteryVoltage();
     }
   } else {
     // 통신 실패: 즉시 정지시키고 속도 상태를 버린다.
