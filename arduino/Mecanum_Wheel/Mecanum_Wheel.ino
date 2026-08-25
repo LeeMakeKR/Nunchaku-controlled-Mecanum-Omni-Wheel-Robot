@@ -29,6 +29,10 @@
 // 공통 ENABLE 핀
 #define ENABLE_PIN    27  // D27
 
+// TMC2209 ENABLE 극성 (액티브 LOW)
+#define ENABLE_ACTIVE_LEVEL     LOW   // 드라이버 활성화
+#define ENABLE_INACTIVE_LEVEL   HIGH  // 드라이버 비활성화
+
 // 배터리 모니터링 핀
 #define BATTERY_PIN   34  // D34 (ADC1_CH6)
 
@@ -77,8 +81,21 @@ const int JOY_THRESHOLD = 20;  // 셋업 모드용
 const float MAX_VELOCITY = 12.0;       // mm/s (최대 속도)
 const float MAX_ACCELERATION = 1.5;   // mm/s^2 (최대 가속도)
 
-// 가속도계 데드존 (변수로 설정하여 수정 가능)
-int ACCEL_DEADZONE = 10;  // 중심값 512 ± 10 범위는 무시
+// 회전(요) 파라미터
+// 순수 회전 시 바퀴 각속도(L_SUM * omega / r)가 순수 이동 시(MAX_VELOCITY / r)와
+// 같아지도록 정의한다. MAX_VELOCITY를 조정하면 회전 속도도 같은 비율로 따라간다.
+const float MAX_OMEGA = MAX_VELOCITY / L_SUM;  // rad/s
+
+// 가속도계(기울임 -> 회전) 파라미터
+// 아래 3개 값은 실측 후 조정해야 한다. DEBUG_TODO.md P1-7 참조.
+int ACCEL_DEADZONE = 20;                    // 중심 부근 무시 범위 (카운트)
+const int ACCEL_X_CENTER = 512;             // 좌우 수평일 때의 accelX
+const float ACCEL_COUNTS_PER_G = 200.0;     // 1g당 카운트
+const float MAX_TILT_G = 0.5;               // 최대 입력으로 볼 기울임 (약 30도)
+const float TILT_DIRECTION = 1.0;           // 실기에서 회전 방향이 반대면 -1.0으로
+
+// 모터 드라이버 활성화 상태 (부팅 시 반드시 비활성)
+bool motorsEnabled = false;
 
 // 현재 속도 (가속도 제어용)
 float current_v_x = 0, current_v_y = 0, current_omega = 0;
@@ -100,6 +117,19 @@ const unsigned long BATTERY_READ_INTERVAL = 1000;  // 1초마다 배터리 읽�
 const float ADC_MAX = 4095.0;
 const float VOLTAGE_CONVERSION_FACTOR = 3.3 / 0.2481;  // 13.28
 float BATTERY_CONVERSION = 0;  // Setup에서 계산
+
+// ========== 모터 드라이버 ENABLE 제어 ==========
+
+// 4개 TMC2209의 공통 ENABLE 핀 제어
+// 유효한 Nunchaku 조작이 있을 때만 활성화한다.
+void setMotorsEnabled(bool enabled) {
+  if(motorsEnabled == enabled) return;  // 상태가 같으면 불필요한 출력 갱신 생략
+
+  motorsEnabled = enabled;
+  digitalWrite(ENABLE_PIN, enabled ? ENABLE_ACTIVE_LEVEL : ENABLE_INACTIVE_LEVEL);
+
+  Serial.println(enabled ? "Motor driver: ENABLED" : "Motor driver: DISABLED");
+}
 
 // ========== Nunchaku 함수 (setup.h 포함 전에 정의) ==========
 
@@ -158,10 +188,18 @@ bool nunchakuRead() {
 void setup() {
   // Serial 초기화
   Serial.begin(115200);
-  
+
+  // 모터 드라이버 비활성화를 최우선으로 처리한다.
+  // 출력 래치를 먼저 비활성 레벨로 올린 뒤 OUTPUT으로 전환해야
+  // pinMode() 직후 한순간도 드라이버가 여자되지 않는다.
+  digitalWrite(ENABLE_PIN, ENABLE_INACTIVE_LEVEL);
+  pinMode(ENABLE_PIN, OUTPUT);
+  digitalWrite(ENABLE_PIN, ENABLE_INACTIVE_LEVEL);
+  motorsEnabled = false;
+
   // I2C 초기화
   Wire.begin();
-  
+
   // 핀 모드 설정
   pinMode(MOTOR_FL_DIR, OUTPUT);
   pinMode(MOTOR_FL_STEP, OUTPUT);
@@ -171,7 +209,6 @@ void setup() {
   pinMode(MOTOR_RR_STEP, OUTPUT);
   pinMode(MOTOR_FR_DIR, OUTPUT);
   pinMode(MOTOR_FR_STEP, OUTPUT);
-  pinMode(ENABLE_PIN, OUTPUT);
   pinMode(BATTERY_PIN, INPUT);
   
   // WS2812 LED 초기화
@@ -190,10 +227,11 @@ void setup() {
   
   // 배터리 전압 계산 계수 미리 계산
   BATTERY_CONVERSION = VOLTAGE_CONVERSION_FACTOR / ADC_MAX;
-  
-  // 모터 활성화
-  digitalWrite(ENABLE_PIN, LOW);
-  
+
+  // 모터는 여기서 활성화하지 않는다.
+  // 유효한 Nunchaku 응답과 Z 버튼 입력이 확인된 뒤 loop()에서 활성화한다.
+  Serial.println("Boot complete. Motor driver is DISABLED until Nunchaku input.");
+
   delay(100);
 }
 
@@ -237,10 +275,36 @@ void joystickToVelocity(int joyX, int joyY, float &v_x, float &v_y, float &omega
     v_y = 0;
   }
   
-  omega = 0;  // 회전은 나중에 추가 (버튼으로 제어 가능)
+  omega = 0;  // 회전은 조이스틱이 아니라 넌차쿠 좌우 기울임이 담당 (accelerometerToOmega)
+}
+
+// 넌차쿠 좌우 기울임(roll)을 요 각속도로 변환
+// 조이스틱 = XY 이동 전담, 좌우 기울임 = 제자리 회전 전담
+float accelerometerToOmega(int accelX) {
+  // accelX: 좌우 기울임 축. 중심(수평)에서의 편차를 사용한다.
+  int offset = accelX - ACCEL_X_CENTER;
+
+  // 데드존: 손떨림 수준의 미세한 기울임은 무시
+  if(abs(offset) < ACCEL_DEADZONE) return 0;
+
+  // 데드존 바깥 구간을 0.0~1.0으로 재매핑 (경계에서 속도가 튀지 않도록)
+  float span = ACCEL_COUNTS_PER_G * MAX_TILT_G - ACCEL_DEADZONE;
+  float tilt = (abs(offset) - ACCEL_DEADZONE) / span;
+  tilt = constrain(tilt, 0.0, 1.0);
+
+  // 많이 기울일수록 빠르게 (조이스틱과 동일한 제곱 곡선)
+  float omega = tilt * tilt * MAX_OMEGA;
+
+  // 좌표계 규칙(Mecanum_calc.md): 반시계(CCW)가 양(+)
+  // 왼쪽으로 기울이면 왼쪽으로 회전(CCW), 오른쪽으로 기울이면 오른쪽으로 회전(CW)
+  if(offset > 0) omega = -omega;
+
+  return omega * TILT_DIRECTION;
 }
 
 // 가속도계 기울임을 차체 속도로 변환
+// [미사용] 기울임은 회전(accelerometerToOmega)에 배정되어 이 함수는 호출되지 않는다.
+//          정리 여부는 DEBUG_TODO.md P4-4 참조.
 void accelerometerToVelocity(int accelX, int accelY, int accelZ, float &v_x, float &v_y, float &omega) {
   // Nunchaku 가속도계 범위: 0-1023 (중립값: 512)
   // 기울임 각도 계산 (라디안)
@@ -316,8 +380,9 @@ void applyAcceleration(float target_v_x, float target_v_y, float target_omega,
   }
   current_v_y += delta_v_y;
   
-  // omega 가속도 제한 (각가속도는 선가속도와 같은 비율 적용)
-  float max_delta_omega = (MAX_ACCELERATION / WHEEL_RADIUS) * dt;
+  // omega 가속도 제한
+  // L_SUM(차체 중심 ~ 바퀴까지의 등가 반경)으로 나누어 선가속도와 같은 비율을 적용한다.
+  float max_delta_omega = (MAX_ACCELERATION / L_SUM) * dt;
   float delta_omega = target_omega - current_omega;
   if(abs(delta_omega) > max_delta_omega) {
     delta_omega = (delta_omega > 0) ? max_delta_omega : -max_delta_omega;
@@ -426,10 +491,16 @@ void loop() {
   if(nunchakuRead()) {
     // Z 버튼이 눌려있을 때만 이동
     if(nunchaku.buttonZ) {
-      // 조이스틱 -> 목표 차체 속도
+      // 유효한 조작 입력이 확인된 경우에만 드라이버 활성화
+      setMotorsEnabled(true);
+
+      // 조이스틱 -> 목표 차체 이동 속도 (XY)
       float target_v_x, target_v_y, target_omega;
       joystickToVelocity(nunchaku.joyX, nunchaku.joyY, target_v_x, target_v_y, target_omega);
-      
+
+      // 넌차쿠 좌우 기울임 -> 목표 요 각속도 (제자리 회전)
+      target_omega = accelerometerToOmega(nunchaku.accelX);
+
       // 가속도 제한 적용 (dt = 0.1초)
       applyAcceleration(target_v_x, target_v_y, target_omega, 
                         current_v_x, current_v_y, current_omega, 0.1);
@@ -440,7 +511,9 @@ void loop() {
       // 로봇 이동 (dt = 0.1초)
       moveRobot(omega_FL, omega_RL, omega_RR, omega_FR, 0.1);
     } else {
-      // Z 버튼 미입력 시 모터 정지 및 현재 속도 리셋
+      // Z 버튼 미입력 시 드라이버 비활성화 및 현재 속도 리셋
+      setMotorsEnabled(false);
+
       current_v_x = 0;
       current_v_y = 0;
       current_omega = 0;
@@ -449,15 +522,19 @@ void loop() {
       omega_RR = 0;
       omega_FR = 0;
     }
-    
+
     // LED 업데이트
     updateButtonLED();
-    
+
     // 배터리 전압 업데이트 (1초마다 한 번)
     if(currentTime - lastBatteryReadTime >= BATTERY_READ_INTERVAL) {
       lastBatteryReadTime = currentTime;
       cachedBattVolt = analogRead(BATTERY_PIN) * BATTERY_CONVERSION;
       isLowVolt = (cachedBattVolt < 11.0);
     }
+  } else {
+    // Nunchaku 응답이 없으면 조작 입력이 없는 것으로 보고 드라이버를 비활성화한다.
+    // (통신 실패 시 속도 상태 리셋과 재초기화는 DEBUG_TODO.md P0-3 항목에서 처리)
+    setMotorsEnabled(false);
   }
 }
