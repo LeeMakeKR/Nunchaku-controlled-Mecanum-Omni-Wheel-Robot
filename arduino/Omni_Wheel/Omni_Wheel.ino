@@ -94,6 +94,7 @@ const bool MOTOR_B_POSITIVE_IS_HIGH = false;
 const bool MOTOR_C_POSITIVE_IS_HIGH = false;
 
 // 모터 파라미터
+
 const int STEPS_PER_REV = 200;          // 1회전당 스텝 (1.8도)
 const int MICROSTEPS = 8;               // 마이크로스텝 설정 (TMC2209 DIP 전부 OFF = 1/8)
 const int TOTAL_STEPS_PER_REV = STEPS_PER_REV * MICROSTEPS;  // 1,600
